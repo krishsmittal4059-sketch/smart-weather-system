@@ -8,7 +8,7 @@ mkdir -p "$APP"
 cp "$SRC/weather_station.py" "$APP/"
 
 apt-get update
-apt-get install -y python3-tk i2c-tools
+apt-get install -y python3-tk i2c-tools rpi-connect rpi-connect-ota
 
 # Enable I2C now so the BME280 can be added later.
 if [ -f /boot/firmware/config.txt ]; then
@@ -53,6 +53,11 @@ EOF
 else
     echo "No graphical desktop user was detected."
     echo "Run the desktop setup commands in RASPBERRY_PI_DESKTOP_SETUP.md after logging into the normal desktop user."
+fi
+
+if command -v rpi-connect >/dev/null 2>&1; then
+    rpi-connect on || true
+    echo "Raspberry Pi Connect has been enabled. Sign in with: rpi-connect signin"
 fi
 
 echo "Smart Weather System installed."
