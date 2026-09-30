@@ -1,0 +1,14 @@
+[Unit]
+Description=Smart Weather System
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/smart-weather-system
+ExecStart=/usr/bin/python3 /opt/smart-weather-system/app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
