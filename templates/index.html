@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Weather System</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#eef4f8;color:#14212b}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:900px;margin:auto;padding:24px}
+header{background:#123447;color:white;border-radius:22px;padding:28px;margin-bottom:18px}
+h1{margin:0 0 6px;font-size:clamp(28px,6vw,46px)}.sub{opacity:.8}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}
+button{border:0;border-radius:12px;padding:13px 18px;font-weight:700;font-size:16px;cursor:pointer}
+#testBtn{background:#f4c95d}#liveBtn{background:#70c7d8}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.card{background:white;border-radius:18px;padding:20px;box-shadow:0 5px 20px #12344718}
+.label{font-size:14px;color:#64727d}.value{font-size:34px;font-weight:800;margin-top:8px}
+.status{margin:18px 0;padding:15px;border-radius:14px;background:white;font-weight:700}
+.small{font-size:13px;color:#687681;margin-top:18px}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.wrap{padding:14px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>🌦 Smart Weather System</h1>
+<div class="sub">Raspberry Pi 1 Model B+ • BME280</div>
+</header>
+<div class="controls">
+<button id="testBtn" onclick="setMode('test')">🧪 Test Mode</button>
+<button id="liveBtn" onclick="setMode('live')">🌦 Live Mode</button>
+</div>
+<div id="status" class="status">Starting…</div>
+<div class="grid">
+<div class="card"><div class="label">Temperature</div><div class="value" id="temp">—</div></div>
+<div class="card"><div class="label">Humidity</div><div class="value" id="hum">—</div></div>
+<div class="card"><div class="label">Pressure</div><div class="value" id="press">—</div></div>
+<div class="card"><div class="label">Altitude</div><div class="value" id="alt">—</div></div>
+</div>
+<div class="small" id="updated">Waiting for reading…</div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+function setValue(id,value,unit){$(id).textContent=value==null?"—":value+" "+unit;}
+async function setMode(mode){
+  try{await fetch("/api/mode/"+mode,{method:"POST"});await refresh();}
+  catch(e){$("status").textContent="Connection error";}
+}
+async function refresh(){
+  try{
+    const r=await fetch("/api/weather",{cache:"no-store"}); const d=await r.json();
+    setValue("temp",d.temperature,"°C"); setValue("hum",d.humidity,"%");
+    setValue("press",d.pressure,"hPa"); setValue("alt",d.altitude,"m");
+    if(d.mode==="test") $("status").textContent="🧪 TEST MODE — simulated data";
+    else if(d.ok) $("status").textContent="🌦 LIVE MODE — BME280 online ("+(d.address||"I2C")+")";
+    else $("status").textContent="⚠ LIVE MODE — "+(d.error||"BME280 error");
+    $("updated").textContent="Last update: "+d.timestamp;
+  }catch(e){$("status").textContent="⚠ Dashboard cannot reach the weather service";}
+}
+refresh(); setInterval(refresh,3000);
+</script>
+</body>
+</html>
