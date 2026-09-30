@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, render_template
-from bme280_sensor import read_bme280
+from weather_data import get_weather, set_mode
 
 app = Flask(__name__)
 
@@ -9,10 +9,14 @@ def index():
 
 @app.route("/api/weather")
 def weather():
-    try:
-        return jsonify({"ok": True, **read_bme280()})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify(get_weather())
+
+@app.route("/api/mode/<mode>", methods=["POST"])
+def mode(mode):
+    if mode not in ("test", "live"):
+        return jsonify({"ok": False, "error": "Invalid mode"}), 400
+    set_mode(mode)
+    return jsonify({"ok": True, "mode": mode})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
