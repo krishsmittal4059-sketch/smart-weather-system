@@ -1,5 +1,0 @@
-#cloud-config
-runcmd:
-  - mkdir -p /opt/smart-weather-system
-  - if [ -d /boot/firmware/weather-system ]; then cp -r /boot/firmware/weather-system/. /opt/smart-weather-system/; fi
-  - cd /opt/smart-weather-system && chmod +x install.sh && ./install.sh
