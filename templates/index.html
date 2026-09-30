@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Weather System</title>
+<style>
+body{margin:0;font-family:Arial,sans-serif;background:#f2f5f7;color:#17202a}
+header{background:#1f2937;color:white;padding:22px 15px;text-align:center}
+.container{max-width:900px;margin:25px auto;padding:0 15px}
+.status{text-align:center;margin-bottom:18px}.online{color:#15803d}.offline{color:#b91c1c}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+.card{background:white;border-radius:14px;padding:22px;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,.08)}
+.icon{font-size:34px}.label{margin-top:10px;color:#64748b}.value{margin-top:8px;font-size:34px;font-weight:bold}
+.unit{font-size:16px;color:#64748b;font-weight:normal}footer{text-align:center;color:#64748b;padding:25px;font-size:13px}
+</style>
+</head>
+<body>
+<header><h1>🌦 Smart Weather System</h1><p>Raspberry Pi + BME280</p></header>
+<div class="container">
+<div id="status" class="status">Connecting to sensor...</div>
+<div class="grid">
+<div class="card"><div class="icon">🌡️</div><div class="label">Temperature</div><div class="value"><span id="temperature">--</span> <span class="unit">°C</span></div></div>
+<div class="card"><div class="icon">💧</div><div class="label">Humidity</div><div class="value"><span id="humidity">--</span> <span class="unit">%</span></div></div>
+<div class="card"><div class="icon">🌬️</div><div class="label">Pressure</div><div class="value"><span id="pressure">--</span> <span class="unit">hPa</span></div></div>
+<div class="card"><div class="icon">⛰️</div><div class="label">Approx. Altitude</div><div class="value"><span id="altitude">--</span> <span class="unit">m</span></div></div>
+</div></div>
+<footer>Last update: <span id="timestamp">--</span></footer>
+<script>
+async function updateWeather(){
+ const status=document.getElementById("status");
+ try{
+  const response=await fetch("/api/weather",{cache:"no-store"});
+  const data=await response.json();
+  if(!data.ok) throw new Error(data.error||"Sensor error");
+  for(const id of ["temperature","humidity","pressure","altitude","timestamp"])
+    document.getElementById(id).textContent=data[id];
+  status.textContent="● Sensor online";status.className="status online";
+ }catch(error){
+  status.textContent="● Sensor error: "+error.message;status.className="status offline";
+ }
+}
+updateWeather();setInterval(updateWeather,5000);
+</script>
+</body>
+</html>
