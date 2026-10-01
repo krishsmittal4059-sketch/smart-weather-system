@@ -30,21 +30,19 @@ def get_live_data():
     return None
 
 
-def draw_graph(canvas, values, title, unit):
+def draw_graph(canvas, values, title, unit, line_color):
     canvas.delete("all")
     width = canvas.winfo_width()
     height = canvas.winfo_height()
-    if width < 10 or height < 10:
-        return
 
-    canvas.create_rectangle(0, 0, width, height, fill="#101010", outline="")
-    canvas.create_text(15, 15, anchor="nw", text=title,
-                       fill="white", font=("Arial", 14, "bold"))
+    canvas.create_rectangle(0, 0, width, height, fill="#111820", outline="")
+    canvas.create_text(18, 15, anchor="nw", text=title,
+                       fill="white", font=("Arial", 15, "bold"))
 
     if len(values) < 2:
         canvas.create_text(width / 2, height / 2,
-                           text="Waiting for data...",
-                           fill="#888888", font=("Arial", 12))
+                           text="Collecting data...",
+                           fill="#82909C", font=("Arial", 13))
         return
 
     minimum = min(values)
@@ -53,21 +51,45 @@ def draw_graph(canvas, values, title, unit):
         maximum += 1
         minimum -= 1
 
-    margin = 35
-    graph_width = width - 2 * margin
-    graph_height = height - 2 * margin
-    points = []
+    left = 48
+    right = 18
+    top = 48
+    bottom = 28
+    graph_width = max(1, width - left - right)
+    graph_height = max(1, height - top - bottom)
 
+    # Lightweight grid
+    for fraction in (0.25, 0.5, 0.75):
+        y = top + fraction * graph_height
+        canvas.create_line(left, y, width - right, y,
+                           fill="#26323C", width=1)
+
+    points = []
     for i, value in enumerate(values):
-        x = margin + (i / (len(values) - 1)) * graph_width
-        y = margin + ((maximum - value) / (maximum - minimum)) * graph_height
+        x = left + (i / (len(values) - 1)) * graph_width
+        y = top + ((maximum - value) / (maximum - minimum)) * graph_height
         points.extend([x, y])
 
-    canvas.create_line(*points, fill="#00FFFF", width=3, smooth=True)
-    canvas.create_text(width - 10, margin, anchor="ne",
-                       text=f"{maximum:.1f} {unit}", fill="white")
-    canvas.create_text(width - 10, height - margin, anchor="se",
-                       text=f"{minimum:.1f} {unit}", fill="white")
+    canvas.create_line(*points, fill=line_color, width=3, smooth=True)
+
+    canvas.create_text(width - right, top, anchor="ne",
+                       text=f"{maximum:.1f} {unit}", fill="#DCE6ED",
+                       font=("Arial", 10))
+    canvas.create_text(width - right, height - bottom, anchor="se",
+                       text=f"{minimum:.1f} {unit}", fill="#82909C",
+                       font=("Arial", 10))
+
+
+def card(parent, title, initial, column):
+    frame = tk.Frame(parent, bg="#111820", highlightthickness=1,
+                     highlightbackground="#26323C")
+    frame.grid(row=0, column=column, sticky="nsew", padx=5)
+    tk.Label(frame, text=title, bg="#111820", fg="#82909C",
+             font=("Arial", 11, "bold")).pack(pady=(10, 2))
+    value = tk.Label(frame, text=initial, bg="#111820", fg="white",
+                     font=("Arial", 24, "bold"))
+    value.pack(pady=(0, 10))
+    return value
 
 
 def set_mode(mode):
@@ -75,15 +97,15 @@ def set_mode(mode):
     MODE = mode
 
     if MODE == "TEST":
-        mode_label.config(text="● TEST MODE", fg="#FFD700")
-        status_label.config(text="SIMULATION DATA — NO SENSOR REQUIRED",
-                            fg="#FFD700")
-        test_button.config(relief="sunken", bd=5)
-        live_button.config(relief="raised", bd=3)
+        mode_label.config(text="● TEST MODE", fg="#FFD34E")
+        status_label.config(text="SIMULATION • NO SENSOR REQUIRED", fg="#FFD34E")
+        test_button.config(relief="sunken", bd=4)
+        live_button.config(relief="raised", bd=2)
     else:
-        mode_label.config(text="● LIVE MODE", fg="#00FF66")
-        test_button.config(relief="raised", bd=3)
-        live_button.config(relief="sunken", bd=5)
+        mode_label.config(text="● LIVE MODE", fg="#49E58A")
+        status_label.config(text="CONNECTING TO BME280...", fg="#49E58A")
+        test_button.config(relief="raised", bd=2)
+        live_button.config(relief="sunken", bd=4)
 
     update_display()
 
@@ -92,7 +114,7 @@ def reset_min_max():
     global temperature_min, temperature_max
     temperature_min = None
     temperature_max = None
-    minmax_label.config(text="MIN: -- °C       MAX: -- °C")
+    minmax_label.config(text="Temperature range: -- / -- °C")
 
 
 def update_display():
@@ -100,25 +122,25 @@ def update_display():
 
     if MODE == "TEST":
         temperature, humidity, pressure, altitude, rain = get_test_data()
-        status_label.config(text="SIMULATION DATA — NO SENSOR REQUIRED",
-                            fg="#FFD700")
+        status_label.config(text="SIMULATION • NO SENSOR REQUIRED", fg="#FFD34E")
+        connection_label.config(text="● SYSTEM ONLINE", fg="#49E58A")
     else:
         data = get_live_data()
-
         if data is None:
             temperature_label.config(text="-- °C")
             humidity_label.config(text="-- %")
             pressure_label.config(text="---- hPa")
             altitude_label.config(text="-- m")
-            rain_label.config(text="RAIN: SENSOR NOT CONNECTED",
-                              fg="#FF5555")
-            status_label.config(text="LIVE MODE — BME280 NOT CONNECTED",
-                                fg="#FF5555")
+            rain_label.config(text="RAIN SENSOR: NOT CONNECTED", fg="#FF7070")
+            status_label.config(text="LIVE MODE • BME280 NOT CONNECTED", fg="#FF7070")
+            connection_label.config(text="● SENSOR OFFLINE", fg="#FF7070")
             time_label.config(text=datetime.now().strftime("%d-%m-%Y   %H:%M:%S"))
+            next_update_label.config(text="Waiting for sensor...")
             root.after(UPDATE_MS, update_display)
             return
 
         temperature, humidity, pressure, altitude, rain = data
+        connection_label.config(text="● BME280 ONLINE", fg="#49E58A")
 
     if temperature_min is None:
         temperature_min = temperature
@@ -141,18 +163,21 @@ def update_display():
     altitude_label.config(text=f"{altitude:.1f} m")
 
     minmax_label.config(
-        text=f"MIN: {temperature_min:.1f} °C       MAX: {temperature_max:.1f} °C"
+        text=f"Temperature range: {temperature_min:.1f} / {temperature_max:.1f} °C"
     )
 
     if rain:
-        rain_label.config(text="☔ RAIN: YES", fg="#00FFFF")
+        rain_label.config(text="☔ RAIN DETECTED", fg="#55D9FF")
     else:
-        rain_label.config(text="☀ RAIN: NO", fg="white")
+        rain_label.config(text="☀ NO RAIN DETECTED", fg="#DCE6ED")
 
     time_label.config(text=datetime.now().strftime("%d-%m-%Y   %H:%M:%S"))
+    next_update_label.config(text=f"Auto refresh: {UPDATE_MS // 1000}s")
 
-    draw_graph(temperature_graph, temperature_history, "TEMPERATURE", "°C")
-    draw_graph(pressure_graph, pressure_history, "PRESSURE", "hPa")
+    draw_graph(temperature_graph, temperature_history,
+               "TEMPERATURE", "°C", "#55D9FF")
+    draw_graph(pressure_graph, pressure_history,
+               "PRESSURE", "hPa", "#A98CFF")
 
     root.after(UPDATE_MS, update_display)
 
@@ -161,118 +186,127 @@ def exit_fullscreen(event=None):
     root.attributes("-fullscreen", False)
 
 
+def close_app(event=None):
+    root.destroy()
+
+
 root = tk.Tk()
-root.title("Raspberry Pi Weather Station")
-root.configure(bg="#050505")
+root.title("Smart Weather System")
+root.configure(bg="#080D12")
 root.attributes("-fullscreen", True)
 root.bind("<Escape>", exit_fullscreen)
+root.bind("<Control-q>", close_app)
 
-top = tk.Frame(root, bg="#151515")
-top.pack(fill="x", padx=5, pady=5)
+# Header
+header = tk.Frame(root, bg="#10161D")
+header.pack(fill="x", padx=6, pady=(6, 3))
 
-title_label = tk.Label(top, text="WEATHER STATION",
-                       bg="#151515", fg="white",
-                       font=("Arial", 24, "bold"))
-title_label.pack(side="left", padx=20, pady=10)
+tk.Label(header, text="SMART WEATHER SYSTEM",
+         bg="#10161D", fg="white",
+         font=("Arial", 24, "bold")).pack(side="left", padx=18, pady=10)
 
-mode_label = tk.Label(top, text="● TEST MODE",
-                      bg="#151515", fg="#FFD700",
-                      font=("Arial", 18, "bold"))
-mode_label.pack(side="left", padx=15)
+mode_label = tk.Label(header, text="● TEST MODE",
+                      bg="#10161D", fg="#FFD34E",
+                      font=("Arial", 15, "bold"))
+mode_label.pack(side="left", padx=10)
 
-button_frame = tk.Frame(top, bg="#151515")
-button_frame.pack(side="right", padx=15, pady=5)
+connection_label = tk.Label(header, text="● SYSTEM ONLINE",
+                            bg="#10161D", fg="#49E58A",
+                            font=("Arial", 12, "bold"))
+connection_label.pack(side="left", padx=10)
+
+button_frame = tk.Frame(header, bg="#10161D")
+button_frame.pack(side="right", padx=12, pady=5)
 
 test_button = tk.Button(
-    button_frame, text="TEST MODE",
+    button_frame, text="TEST",
     command=lambda: set_mode("TEST"),
-    font=("Arial", 16, "bold"),
-    bg="#806600", fg="white",
-    activebackground="#B38F00",
-    activeforeground="white",
-    width=14, height=2,
-    relief="sunken", bd=5, cursor="hand2")
-test_button.pack(side="left", padx=5)
+    font=("Arial", 13, "bold"),
+    bg="#665500", fg="white",
+    activebackground="#8A7300", activeforeground="white",
+    width=9, height=1, relief="sunken", bd=4, cursor="hand2")
+test_button.pack(side="left", padx=4)
 
 live_button = tk.Button(
-    button_frame, text="LIVE MODE",
+    button_frame, text="LIVE",
     command=lambda: set_mode("LIVE"),
-    font=("Arial", 16, "bold"),
+    font=("Arial", 13, "bold"),
     bg="#087A3B", fg="white",
-    activebackground="#0BAA55",
-    activeforeground="white",
-    width=14, height=2,
-    relief="raised", bd=3, cursor="hand2")
-live_button.pack(side="left", padx=5)
+    activebackground="#0BAA55", activeforeground="white",
+    width=9, height=1, relief="raised", bd=2, cursor="hand2")
+live_button.pack(side="left", padx=4)
 
+# Status bar
 status_label = tk.Label(
-    root, text="SIMULATION DATA — NO SENSOR REQUIRED",
-    bg="#050505", fg="#FFD700",
-    font=("Arial", 13, "bold"))
-status_label.pack(pady=3)
+    root, text="SIMULATION • NO SENSOR REQUIRED",
+    bg="#080D12", fg="#FFD34E",
+    font=("Arial", 11, "bold"))
+status_label.pack(pady=(2, 2))
 
-values_frame = tk.Frame(root, bg="#050505")
-values_frame.pack(fill="x", padx=10, pady=5)
+# Measurement cards
+values_frame = tk.Frame(root, bg="#080D12")
+values_frame.pack(fill="x", padx=8, pady=4)
 
-temperature_label = tk.Label(
-    values_frame, text="-- °C", bg="#050505", fg="white",
-    font=("Arial", 32, "bold"))
-temperature_label.grid(row=0, column=0, padx=25)
+for i in range(4):
+    values_frame.grid_columnconfigure(i, weight=1)
 
-humidity_label = tk.Label(
-    values_frame, text="-- %", bg="#050505", fg="white",
-    font=("Arial", 26, "bold"))
-humidity_label.grid(row=0, column=1, padx=25)
+temperature_label = card(values_frame, "TEMPERATURE", "-- °C", 0)
+humidity_label = card(values_frame, "HUMIDITY", "-- %", 1)
+pressure_label = card(values_frame, "PRESSURE", "---- hPa", 2)
+altitude_label = card(values_frame, "ALTITUDE", "-- m", 3)
 
-pressure_label = tk.Label(
-    values_frame, text="---- hPa", bg="#050505", fg="white",
-    font=("Arial", 26, "bold"))
-pressure_label.grid(row=0, column=2, padx=25)
-
-altitude_label = tk.Label(
-    values_frame, text="-- m", bg="#050505", fg="white",
-    font=("Arial", 26, "bold"))
-altitude_label.grid(row=0, column=3, padx=25)
+# Secondary information
+info_frame = tk.Frame(root, bg="#080D12")
+info_frame.pack(fill="x", padx=14, pady=4)
 
 minmax_label = tk.Label(
-    root, text="MIN: -- °C       MAX: -- °C",
-    bg="#050505", fg="white",
-    font=("Arial", 15, "bold"))
-minmax_label.pack(pady=4)
+    info_frame, text="Temperature range: -- / -- °C",
+    bg="#080D12", fg="#DCE6ED",
+    font=("Arial", 12, "bold"))
+minmax_label.pack(side="left")
 
 rain_label = tk.Label(
-    root, text="☀ RAIN: NO",
-    bg="#050505", fg="white",
-    font=("Arial", 17, "bold"))
-rain_label.pack(pady=3)
+    info_frame, text="☀ NO RAIN DETECTED",
+    bg="#080D12", fg="#DCE6ED",
+    font=("Arial", 12, "bold"))
+rain_label.pack(side="right")
 
-reset_button = tk.Button(
-    root, text="RESET MIN / MAX",
-    command=reset_min_max,
-    font=("Arial", 11, "bold"),
-    bg="#333333", fg="white",
-    activebackground="#555555",
-    activeforeground="white",
-    padx=15, pady=5, cursor="hand2")
-reset_button.pack(pady=3)
-
-graphs = tk.Frame(root, bg="#050505")
-graphs.pack(fill="both", expand=True, padx=10, pady=5)
+# Graphs
+graphs = tk.Frame(root, bg="#080D12")
+graphs.pack(fill="both", expand=True, padx=10, pady=4)
 
 temperature_graph = tk.Canvas(
-    graphs, bg="#101010", highlightthickness=1,
-    highlightbackground="#333333")
-temperature_graph.pack(side="left", fill="both", expand=True, padx=5)
+    graphs, bg="#111820", highlightthickness=1,
+    highlightbackground="#26323C")
+temperature_graph.pack(side="left", fill="both", expand=True, padx=4)
 
 pressure_graph = tk.Canvas(
-    graphs, bg="#101010", highlightthickness=1,
-    highlightbackground="#333333")
-pressure_graph.pack(side="right", fill="both", expand=True, padx=5)
+    graphs, bg="#111820", highlightthickness=1,
+    highlightbackground="#26323C")
+pressure_graph.pack(side="right", fill="both", expand=True, padx=4)
+
+# Footer
+footer = tk.Frame(root, bg="#10161D")
+footer.pack(fill="x", padx=6, pady=(3, 6))
+
+reset_button = tk.Button(
+    footer, text="RESET MIN / MAX",
+    command=reset_min_max,
+    font=("Arial", 10, "bold"),
+    bg="#27313A", fg="white",
+    activebackground="#3A4650", activeforeground="white",
+    padx=12, pady=4, cursor="hand2")
+reset_button.pack(side="left", padx=10, pady=5)
 
 time_label = tk.Label(
-    root, text="", bg="#050505", fg="#888888",
-    font=("Arial", 12))
-time_label.pack(pady=4)
+    footer, text="", bg="#10161D", fg="#AAB6BF",
+    font=("Arial", 11))
+time_label.pack(side="left", padx=15)
+
+next_update_label = tk.Label(
+    footer, text="Auto refresh: 2s", bg="#10161D", fg="#82909C",
+    font=("Arial", 10))
+next_update_label.pack(side="right", padx=15)
 
 set_mode("TEST")
 root.mainloop()
