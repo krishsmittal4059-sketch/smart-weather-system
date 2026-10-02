@@ -150,9 +150,13 @@ def draw_sparkline(canvas, values, title_text, unit, accent):
 def set_mode(mode):
     global MODE
     MODE = mode
+
     if MODE == "TEST":
         mode_label.config(text="TEST", fg=YELLOW)
+        connection_label.config(text="● SYSTEM ONLINE", fg=GREEN)
         status_label.config(text="SIMULATION • HARDWARE NOT REQUIRED", fg=YELLOW)
+        sensor_state.config(text="SIMULATED SENSOR", fg=YELLOW)
+        sensor_detail.config(text="Test generator • safe for exhibition demo")
         test_button.config(relief="sunken", bd=3)
         live_button.config(relief="raised", bd=2)
     else:
@@ -160,9 +164,8 @@ def set_mode(mode):
         status_label.config(text="LIVE SENSOR • BME280", fg=GREEN)
         test_button.config(relief="raised", bd=2)
         live_button.config(relief="sunken", bd=3)
+
     update_display()
-
-
 def reset_history():
     global temperature_history, pressure_history, humidity_history
     global temperature_min, temperature_max
@@ -257,8 +260,11 @@ def update_display():
 
     if MODE == "TEST":
         data = get_test_data()
+        mode_label.config(text="TEST", fg=YELLOW)
         status_label.config(text="SIMULATION • HARDWARE NOT REQUIRED", fg=YELLOW)
         connection_label.config(text="● SYSTEM ONLINE", fg=GREEN)
+        sensor_state.config(text="SIMULATED SENSOR", fg=YELLOW)
+        sensor_detail.config(text="Test generator • safe for exhibition demo")
     else:
         data = get_live_data()
         if not data.get("sensor_ok", False):
