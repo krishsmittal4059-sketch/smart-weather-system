@@ -214,10 +214,14 @@ def update_dashboard(data):
         pressure_history.pop(0)
         humidity_history.pop(0)
 
-    temp_value.config(text=f"{temperature:.1f} °C")
-    humidity_value.config(text=f"{humidity:.1f} %")
-    pressure_value.config(text=f"{pressure:.1f} hPa")
-    altitude_value.config(text=f"{altitude:.1f} m")
+    # Refresh the main measurement cards explicitly on every sample.
+    temp_value.configure(text=f"{temperature:.1f} °C")
+    humidity_value.configure(text=f"{humidity:.1f} %")
+    pressure_value.configure(text=f"{pressure:.1f} hPa")
+    altitude_value.configure(text=f"{altitude:.1f} m")
+    temp_value.update_idletasks()
+    humidity_value.update_idletasks()
+    pressure_value.update_idletasks()
 
     temp_range_value.config(
         text=f"{temperature_min:.1f} / {temperature_max:.1f} °C"
