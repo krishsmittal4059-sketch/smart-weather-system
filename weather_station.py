@@ -292,6 +292,14 @@ def update_display():
     last_update = datetime.now()
 
     update_dashboard(data)
+
+    # Keep the headline cards synchronized with the latest reading.
+    temp_value.config(text=f"{data['temperature']:.1f} °C")
+    humidity_value.config(text=f"{data['humidity']:.1f} %")
+    pressure_value.config(text=f"{data['pressure']:.1f} hPa")
+    altitude_value.config(text=f"{data['altitude']:.1f} m")
+    root.update_idletasks()
+
     update_analytics()
 
     sensor_state.config(
