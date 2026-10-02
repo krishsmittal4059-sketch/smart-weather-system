@@ -8,7 +8,7 @@ mkdir -p "$APP"
 cp "$SRC/weather_station.py" "$APP/"
 
 apt-get update
-apt-get install -y python3-tk i2c-tools rpi-connect rpi-connect-ota
+apt-get install -y python3-tk i2c-tools rpi-connect rpi-connect-ota python3-pip && python3 -m pip install --break-system-packages smbus2 RPi.bme280
 
 # Enable I2C now so the BME280 can be added later.
 if [ -f /boot/firmware/config.txt ]; then
