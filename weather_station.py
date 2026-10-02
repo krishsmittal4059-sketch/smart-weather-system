@@ -2,6 +2,86 @@ import tkinter as tk
 import random
 import math
 from datetime import datetime
+import random
+
+
+class BME280Sensor:
+    def __init__(self, test_mode=True):
+        self.test_mode = test_mode
+        self.address = None
+        self.bus = None
+        self.calibration = None
+        self.last = {"temperature": 27.0, "humidity": 60.0, "pressure": 1008.0, "altitude": 40.0, "sensor_ok": True, "mode": "TEST"}
+        if not self.test_mode:
+            self._connect()
+
+    def _connect(self):
+        try:
+            import smbus2
+            import bme280
+            self.smbus2 = smbus2
+            self.bme280 = bme280
+            for address in (0x76, 0x77):
+                bus = None
+                try:
+                    bus = smbus2.SMBus(1)
+                    calibration = bme280.load_calibration_params(bus, address)
+                    self.bus = bus
+                    self.address = address
+                    self.calibration = calibration
+                    print("BME280 found at:", hex(address))
+                    return
+                except Exception:
+                    if bus is not None:
+                        try:
+                            bus.close()
+                        except Exception:
+                            pass
+            print("BME280 not found at 0x76 or 0x77")
+            self.bus = None
+            self.address = None
+        except Exception as error:
+            print("BME280 library error:", error)
+            self.bus = None
+
+    def _read_real(self):
+        if self.bus is None:
+            self._connect()
+        if self.bus is None:
+            return {"temperature": None, "humidity": None, "pressure": None, "altitude": None, "sensor_ok": False, "mode": "BME280"}
+        data = self.bme280.sample(self.bus, self.address, self.calibration)
+        pressure = float(data.pressure)
+        altitude = 44330.0 * (1.0 - (pressure / 1013.25) ** 0.1903)
+        return {
+            "temperature": round(float(data.temperature), 1),
+            "humidity": round(float(data.humidity), 1),
+            "pressure": round(pressure, 1),
+            "altitude": round(altitude, 1),
+            "sensor_ok": True,
+            "mode": "BME280"
+        }
+
+    def _read_test(self):
+        old = self.last
+        temperature = max(18.0, min(42.0, old["temperature"] + random.uniform(-0.25, 0.25)))
+        humidity = max(20.0, min(90.0, old["humidity"] + random.uniform(-0.8, 0.8)))
+        pressure = max(980.0, min(1030.0, old["pressure"] + random.uniform(-0.7, 0.7)))
+        altitude = 44330.0 * (1.0 - (pressure / 1013.25) ** 0.1903)
+        self.last = {"temperature": round(temperature, 1), "humidity": round(humidity, 1), "pressure": round(pressure, 1), "altitude": round(altitude, 1), "sensor_ok": True, "mode": "TEST"}
+        return dict(self.last)
+
+    def read(self):
+        if self.test_mode:
+            return self._read_test()
+        try:
+            result = self._read_real()
+            self.last = dict(result)
+            return result
+        except Exception as error:
+            print("BME280 read error:", error)
+            self.bus = None
+            return {"temperature": None, "humidity": None, "pressure": None, "altitude": None, "sensor_ok": False, "mode": "BME280"}
+
 
 MODE = "TEST"
 UPDATE_MS = 2000
@@ -12,6 +92,9 @@ pressure_history = []
 temperature_min = None
 temperature_max = None
 test_time = 0
+
+
+sensor = BME280Sensor(test_mode=True)
 
 
 def get_test_data():
@@ -27,7 +110,8 @@ def get_test_data():
 
 def get_live_data():
     # BME280 support will be connected here when the sensor is available.
-    return None
+    sensor.test_mode = False
+    return sensor.read()
 
 
 def draw_graph(canvas, values, title, unit, line_color):
@@ -121,12 +205,18 @@ def update_display():
     global temperature_min, temperature_max
 
     if MODE == "TEST":
-        temperature, humidity, pressure, altitude, rain = get_test_data()
+        sensor.test_mode = True
+        data = sensor.read()
+        temperature = data["temperature"]
+        humidity = data["humidity"]
+        pressure = data["pressure"]
+        altitude = data["altitude"]
+        rain = False
         status_label.config(text="SIMULATION • NO SENSOR REQUIRED", fg="#FFD34E")
         connection_label.config(text="● SYSTEM ONLINE", fg="#49E58A")
     else:
         data = get_live_data()
-        if data is None:
+        if data is None or not data.get("sensor_ok", False):
             temperature_label.config(text="-- °C")
             humidity_label.config(text="-- %")
             pressure_label.config(text="---- hPa")
@@ -139,7 +229,11 @@ def update_display():
             root.after(UPDATE_MS, update_display)
             return
 
-        temperature, humidity, pressure, altitude, rain = data
+        temperature = data["temperature"]
+        humidity = data["humidity"]
+        pressure = data["pressure"]
+        altitude = data["altitude"]
+        rain = False
         connection_label.config(text="● BME280 ONLINE", fg="#49E58A")
 
     if temperature_min is None:
