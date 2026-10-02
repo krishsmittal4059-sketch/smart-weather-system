@@ -485,7 +485,7 @@ last_reading.pack(anchor="w", padx=12, pady=(4, 10))
 # ---------- ANALYTICS ----------
 for col in range(2):
     analytics_frame.grid_columnconfigure(col, weight=1)
-for row in range(2):
+for row in range(3):
     analytics_frame.grid_rowconfigure(row, weight=1)
 
 analytics_temp = tk.Canvas(analytics_frame, bg=PANEL,
@@ -505,8 +505,8 @@ analytics_stats = tk.Label(
     text="Waiting for measurements...",
     bg=PANEL_2, fg=TEXT,
     font=("Arial", 11, "bold"))
-analytics_stats.grid(row=1, column=0, columnspan=2,
-                     sticky="se", padx=18, pady=14)
+analytics_stats.grid(row=2, column=0, columnspan=2,
+                     sticky="ew", padx=18, pady=8)
 
 
 # ---------- FOOTER ----------
