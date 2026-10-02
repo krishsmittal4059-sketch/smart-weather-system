@@ -6,9 +6,11 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 
 mkdir -p "$APP"
 cp "$SRC/weather_station.py" "$APP/"
+cp "$SRC/bme280_sensor.py" "$APP/"
 
 apt-get update
-apt-get install -y python3-tk i2c-tools rpi-connect rpi-connect-ota python3-pip && python3 -m pip install --break-system-packages smbus2 RPi.bme280
+apt-get install -y python3-tk i2c-tools rpi-connect rpi-connect-ota python3-pip
+python3 -m pip install --break-system-packages smbus2 RPi.bme280
 
 # Enable I2C now so the BME280 can be added later.
 if [ -f /boot/firmware/config.txt ]; then
@@ -20,7 +22,7 @@ if [ -f /boot/firmware/config.txt ]; then
 fi
 
 chmod 755 "$APP"
-chmod 644 "$APP/weather_station.py"
+chmod 644 "$APP/weather_station.py" "$APP/bme280_sensor.py"
 
 # Launch the native Tkinter dashboard automatically after graphical login.
 DESKTOP_USER=""
