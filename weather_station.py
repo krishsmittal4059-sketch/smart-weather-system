@@ -198,15 +198,25 @@ def set_mode(mode):
         status_label.config(text="SIMULATION • HARDWARE NOT REQUIRED", fg=YELLOW)
         sensor_state.config(text="SIMULATED SENSOR", fg=YELLOW)
         sensor_detail.config(text="Test generator • safe for exhibition demo")
-        test_button.config(relief="sunken", bd=3)
-        live_button.config(relief="raised", bd=2)
+        mode_button.config(
+            text="SWITCH TO LIVE",
+            bg="#075D31",
+            activebackground="#078A48"
+        )
     else:
         mode_label.config(text="LIVE", fg=GREEN)
         status_label.config(text="LIVE SENSOR • CHECKING", fg=YELLOW)
-        test_button.config(relief="raised", bd=2)
-        live_button.config(relief="sunken", bd=3)
+        mode_button.config(
+            text="SWITCH TO TEST",
+            bg="#5C4D00",
+            activebackground="#806E00"
+        )
 
     update_display()
+
+
+def toggle_mode():
+    set_mode("LIVE" if MODE == "TEST" else "TEST")
 
 
 def reset_history():
@@ -428,19 +438,13 @@ for page in ("DASHBOARD", "ANALYTICS"):
     btn.pack(side="left", padx=3)
     nav_buttons[page] = btn
 
-test_button = tk.Button(
-    nav, text="TEST MODE",
-    command=lambda: set_mode("TEST"),
-    bg="#5C4D00", fg=TEXT, activebackground="#806E00",
-    font=("Arial", 9, "bold"), bd=0, padx=14, pady=6, cursor="hand2")
-test_button.pack(side="right", padx=3)
-
-live_button = tk.Button(
-    nav, text="LIVE MODE",
-    command=lambda: set_mode("LIVE"),
+mode_button = tk.Button(
+    nav, text="SWITCH TO LIVE",
+    command=toggle_mode,
     bg="#075D31", fg=TEXT, activebackground="#078A48",
-    font=("Arial", 9, "bold"), bd=0, padx=14, pady=6, cursor="hand2")
-live_button.pack(side="right", padx=3)
+    font=("Arial", 9, "bold"), bd=0, padx=14, pady=6,
+    cursor="hand2")
+mode_button.pack(side="right", padx=3)
 
 
 status_label = tk.Label(root, text="SIMULATION • HARDWARE NOT REQUIRED",
