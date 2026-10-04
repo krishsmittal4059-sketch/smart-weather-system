@@ -29,6 +29,7 @@ temperature_max = None
 last_data = None
 last_update = None
 active_page = "DASHBOARD"
+update_job = None
 
 sensor = BME280Sensor(test_mode=True)
 
@@ -148,8 +149,15 @@ def draw_sparkline(canvas, values, title_text, unit, accent):
 
 
 def set_mode(mode):
-    global MODE
-    MODE = mode
+    global MODE, update_job
+    MODE = "TEST" if mode == "TEST" else "LIVE"
+
+    if update_job is not None:
+        try:
+            root.after_cancel(update_job)
+        except Exception:
+            pass
+        update_job = None
 
     if MODE == "TEST":
         mode_label.config(text="TEST", fg=YELLOW)
@@ -161,14 +169,20 @@ def set_mode(mode):
         live_button.config(relief="raised", bd=2)
     else:
         mode_label.config(text="LIVE", fg=GREEN)
-        status_label.config(text="LIVE SENSOR • BME280", fg=GREEN)
+        status_label.config(text="LIVE SENSOR • CHECKING", fg=YELLOW)
         test_button.config(relief="raised", bd=2)
         live_button.config(relief="sunken", bd=3)
 
     update_display()
 def reset_history():
     global temperature_history, pressure_history, humidity_history
-    global temperature_min, temperature_max
+    global temperature_min, temperature_max, update_job
+    if update_job is not None:
+        try:
+            root.after_cancel(update_job)
+        except Exception:
+            pass
+        update_job = None
     temperature_history = []
     pressure_history = []
     humidity_history = []
@@ -178,8 +192,8 @@ def reset_history():
 
 
 def show_page(page):
-    global ACTIVE_PAGE
-    ACTIVE_PAGE = page
+    global active_page
+    active_page = page
     for name, button in nav_buttons.items():
         button.config(bg="#1E2B35" if name == page else PANEL_2,
                       fg=CYAN if name == page else MUTED)
@@ -214,14 +228,11 @@ def update_dashboard(data):
         pressure_history.pop(0)
         humidity_history.pop(0)
 
-    # Refresh the main measurement cards explicitly on every sample.
-    temp_value.configure(text=f"{temperature:.1f} °C")
-    humidity_value.configure(text=f"{humidity:.1f} %")
-    pressure_value.configure(text=f"{pressure:.1f} hPa")
-    altitude_value.configure(text=f"{altitude:.1f} m")
-    temp_value.update_idletasks()
-    humidity_value.update_idletasks()
-    pressure_value.update_idletasks()
+    # StringVars provide reliable updates on the Pi 1 Tkinter display.
+    temperature_var.set(f"{temperature:.1f} °C")
+    humidity_var.set(f"{humidity:.1f} %")
+    pressure_var.set(f"{pressure:.1f} hPa")
+    altitude_var.set(f"{altitude:.1f} m")
 
     temp_range_value.config(
         text=f"{temperature_min:.1f} / {temperature_max:.1f} °C"
@@ -272,17 +283,18 @@ def update_display():
     else:
         data = get_live_data()
         if not data.get("sensor_ok", False):
-            temp_value.config(text="-- °C")
-            humidity_value.config(text="-- %")
-            pressure_value.config(text="---- hPa")
-            altitude_value.config(text="-- m")
+            temperature_var.set("-- °C")
+            humidity_var.set("-- %")
+            pressure_var.set("---- hPa")
+            altitude_var.set("-- m")
             status_label.config(text="LIVE • BME280 NOT CONNECTED", fg=RED)
             connection_label.config(text="● SENSOR OFFLINE", fg=RED)
             sensor_state.config(text="BME280 OFFLINE", fg=RED)
             sensor_detail.config(text="Check I²C wiring and address 0x76 / 0x77")
             last_reading.config(text="No valid reading")
             clock_label.config(text=datetime.now().strftime("%d %b %Y   %H:%M:%S"))
-            root.after(UPDATE_MS, update_display)
+            global update_job
+    update_job = root.after(UPDATE_MS, update_display)
             return
 
         status_label.config(text="LIVE • BME280 CONNECTED", fg=GREEN)
@@ -292,13 +304,6 @@ def update_display():
     last_update = datetime.now()
 
     update_dashboard(data)
-
-    # Keep the headline cards synchronized with the latest reading.
-    temp_value.config(text=f"{data['temperature']:.1f} °C")
-    humidity_value.config(text=f"{data['humidity']:.1f} %")
-    pressure_value.config(text=f"{data['pressure']:.1f} hPa")
-    altitude_value.config(text=f"{data['altitude']:.1f} m")
-    root.update_idletasks()
 
     update_analytics()
 
@@ -434,15 +439,20 @@ for frame, label_text in ((card1, "TEMPERATURE"), (card2, "HUMIDITY"),
                           (card3, "PRESSURE")):
     title(frame, label_text).pack(anchor="w", padx=12, pady=(8, 0))
 
-temp_value = tk.Label(card1, text="-- °C", bg=PANEL, fg=TEXT,
+temperature_var = tk.StringVar(value="-- °C")
+humidity_var = tk.StringVar(value="-- %")
+pressure_var = tk.StringVar(value="---- hPa")
+altitude_var = tk.StringVar(value="-- m")
+
+temp_value = tk.Label(card1, textvariable=temperature_var, bg=PANEL, fg=TEXT,
                       font=("Arial", 23, "bold"))
 temp_value.pack(anchor="w", padx=12, pady=(1, 8))
 
-humidity_value = tk.Label(card2, text="-- %", bg=PANEL, fg=TEXT,
+humidity_value = tk.Label(card2, textvariable=humidity_var, bg=PANEL, fg=TEXT,
                           font=("Arial", 23, "bold"))
 humidity_value.pack(anchor="w", padx=12, pady=(1, 8))
 
-pressure_value = tk.Label(card3, text="---- hPa", bg=PANEL, fg=TEXT,
+pressure_value = tk.Label(card3, textvariable=pressure_var, bg=PANEL, fg=TEXT,
                           font=("Arial", 23, "bold"))
 pressure_value.pack(anchor="w", padx=12, pady=(1, 8))
 
@@ -486,7 +496,7 @@ temp_range_value.pack(anchor="w", padx=12, pady=(1, 10))
 
 tk.Label(info, text="ALTITUDE", bg=PANEL, fg=MUTED,
          font=("Arial", 9, "bold")).pack(anchor="w", padx=12)
-altitude_value = tk.Label(info, text="-- m", bg=PANEL, fg=TEXT,
+altitude_value = tk.Label(info, textvariable=altitude_var, bg=PANEL, fg=TEXT,
                           font=("Arial", 16, "bold"))
 altitude_value.pack(anchor="w", padx=12, pady=(1, 10))
 
