@@ -148,9 +148,31 @@ def draw_sparkline(canvas, values, title_text, unit, accent):
                        fill=accent, outline="")
 
 
+def clear_graph_history():
+    global temperature_history, pressure_history, humidity_history
+    global temperature_min, temperature_max
+    temperature_history = []
+    pressure_history = []
+    humidity_history = []
+    temperature_min = None
+    temperature_max = None
+
+    # Immediately redraw every graph so the new mode starts with a clean screen.
+    for chart in (
+        temp_chart, pressure_chart,
+        analytics_temp, analytics_pressure, analytics_humidity
+    ):
+        chart.delete("all")
+
+    update_analytics()
+
+
 def set_mode(mode):
     global MODE, update_job
     MODE = "TEST" if mode == "TEST" else "LIVE"
+
+    # Switching TEST/LIVE starts a completely fresh graph history.
+    clear_graph_history()
 
     if update_job is not None:
         try:
@@ -174,7 +196,10 @@ def set_mode(mode):
         live_button.config(relief="sunken", bd=3)
 
     update_display()
+
+
 def reset_history():
+
     global temperature_history, pressure_history, humidity_history
     global temperature_min, temperature_max, update_job
     if update_job is not None:
@@ -186,8 +211,7 @@ def reset_history():
     temperature_history = []
     pressure_history = []
     humidity_history = []
-    temperature_min = None
-    temperature_max = None
+    clear_graph_history()
     update_display()
 
 
@@ -542,11 +566,18 @@ footer.pack(fill="x", padx=6, pady=(2, 6))
 footer.pack_propagate(False)
 
 tk.Button(
+    footer, text="REFRESH GRAPHS",
+    command=reset_history,
+    bg=PANEL_2, fg=CYAN, activebackground="#2A3944",
+    font=("Arial", 9, "bold"), bd=0, padx=12, pady=5,
+    cursor="hand2").pack(side="left", padx=(10, 5), pady=5)
+
+tk.Button(
     footer, text="RESET HISTORY",
     command=reset_history,
     bg=PANEL_2, fg=TEXT, activebackground="#2A3944",
     font=("Arial", 9, "bold"), bd=0, padx=12, pady=5,
-    cursor="hand2").pack(side="left", padx=10, pady=5)
+    cursor="hand2").pack(side="left", padx=5, pady=5)
 
 tk.Label(footer, text="ESC  EXIT FULLSCREEN   •   F11  FULLSCREEN   •   CTRL+Q  EXIT",
          bg="#0D141B", fg=MUTED,
