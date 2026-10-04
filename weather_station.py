@@ -107,17 +107,20 @@ def draw_sparkline(canvas, values, title_text, unit, accent):
     canvas.create_text(14, 12, anchor="nw", text=title_text,
                        fill=TEXT, font=("Arial", 12, "bold"))
 
-    if len(values) < 2:
+    if not values:
         canvas.create_text(width / 2, height / 2,
-                           text="Collecting trend data...",
+                           text="Waiting for measurements...",
                            fill=MUTED, font=("Arial", 11))
         return
 
+    # Draw even the first sample so the graph never looks stuck after
+    # switching TEST/LIVE mode or pressing REFRESH GRAPHS.
     low = min(values)
     high = max(values)
     if high == low:
-        high += 1
-        low -= 1
+        padding = max(abs(high) * 0.01, 1.0)
+        high += padding
+        low -= padding
 
     left, right, top, bottom = 14, 14, 42, 24
     gw = width - left - right
