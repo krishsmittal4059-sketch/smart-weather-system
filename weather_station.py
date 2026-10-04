@@ -271,7 +271,7 @@ def update_analytics():
 
 
 def update_display():
-    global last_data, last_update
+    global last_data, last_update, update_job
 
     if MODE == "TEST":
         data = get_test_data()
@@ -293,10 +293,11 @@ def update_display():
             sensor_detail.config(text="Check I²C wiring and address 0x76 / 0x77")
             last_reading.config(text="No valid reading")
             clock_label.config(text=datetime.now().strftime("%d %b %Y   %H:%M:%S"))
-            global update_job
-    update_job = root.after(UPDATE_MS, update_display)
+            update_counter.config(text=f"REFRESH  {UPDATE_MS // 1000}s")
+            update_job = root.after(UPDATE_MS, update_display)
             return
 
+        mode_label.config(text="LIVE", fg=GREEN)
         status_label.config(text="LIVE • BME280 CONNECTED", fg=GREEN)
         connection_label.config(text="● BME280 ONLINE", fg=GREEN)
 
@@ -304,7 +305,6 @@ def update_display():
     last_update = datetime.now()
 
     update_dashboard(data)
-
     update_analytics()
 
     sensor_state.config(
@@ -321,8 +321,7 @@ def update_display():
 
     clock_label.config(text=datetime.now().strftime("%d %b %Y   %H:%M:%S"))
     update_counter.config(text=f"REFRESH  {UPDATE_MS // 1000}s")
-    root.after(UPDATE_MS, update_display)
-
+    update_job = root.after(UPDATE_MS, update_display)
 
 def exit_fullscreen(event=None):
     root.attributes("-fullscreen", False)
