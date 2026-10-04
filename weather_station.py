@@ -64,10 +64,10 @@ def title(parent, text, size=11):
 def draw_gauge(canvas, value, minimum, maximum, label, unit, accent, suffix=""):
     canvas.delete("all")
     width = max(150, canvas.winfo_width())
-    height = max(130, canvas.winfo_height())
+    height = max(80, canvas.winfo_height())
     cx = width / 2
-    cy = height * 0.58
-    radius = min(width * 0.35, height * 0.38)
+    cy = height * 0.52
+    radius = min(width * 0.35, height * 0.30)
 
     canvas.create_arc(cx - radius, cy - radius, cx + radius, cy + radius,
                       start=135, extent=-270, style="arc",
@@ -255,11 +255,12 @@ def update_dashboard(data):
         pressure_history.pop(0)
         humidity_history.pop(0)
 
-    # StringVars provide reliable updates on the Pi 1 Tkinter display.
-    temperature_var.set(f"{temperature:.1f} °C")
-    humidity_var.set(f"{humidity:.1f} %")
-    pressure_var.set(f"{pressure:.1f} hPa")
-    altitude_var.set(f"{altitude:.1f} m")
+    # Update the visible labels directly. This is more reliable on older
+    # Tkinter builds than relying on StringVar refresh behavior.
+    temp_value.config(text=f"{temperature:.1f} °C")
+    humidity_value.config(text=f"{humidity:.1f} %")
+    pressure_value.config(text=f"{pressure:.1f} hPa")
+    altitude_value.config(text=f"{altitude:.1f} m")
 
     temp_range_value.config(
         text=f"{temperature_min:.1f} / {temperature_max:.1f} °C"
@@ -310,10 +311,10 @@ def update_display():
     else:
         data = get_live_data()
         if not data.get("sensor_ok", False):
-            temperature_var.set("-- °C")
-            humidity_var.set("-- %")
-            pressure_var.set("---- hPa")
-            altitude_var.set("-- m")
+            temp_value.config(text="-- °C")
+            humidity_value.config(text="-- %")
+            pressure_value.config(text="---- hPa")
+            altitude_value.config(text="-- m")
             status_label.config(text="LIVE • BME280 NOT CONNECTED", fg=RED)
             connection_label.config(text="● SENSOR OFFLINE", fg=RED)
             sensor_state.config(text="BME280 OFFLINE", fg=RED)
