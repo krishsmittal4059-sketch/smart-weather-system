@@ -110,7 +110,14 @@ class BME280Sensor:
             return result
         except Exception as error:
             print("BME280 read error:", error)
+            if self.bus is not None:
+                try:
+                    self.bus.close()
+                except Exception:
+                    pass
             self.bus = None
+            self.address = None
+            self.calibration = None
             return {
                 "temperature": None,
                 "humidity": None,
