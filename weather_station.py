@@ -132,12 +132,20 @@ def draw_sparkline(canvas, values, title_text, unit, accent):
                            fill="#1D2932", width=1)
 
     points = []
-    for index, value in enumerate(values):
-        x = left + index * gw / (len(values) - 1)
-        y = top + (high - value) * gh / (high - low)
+    if len(values) == 1:
+        # A single sample has no horizontal span yet; place it in the
+        # middle instead of dividing by zero.
+        x = left + gw / 2
+        y = top + (high - values[0]) * gh / (high - low)
         points.extend((x, y))
+    else:
+        for index, value in enumerate(values):
+            x = left + index * gw / (len(values) - 1)
+            y = top + (high - value) * gh / (high - low)
+            points.extend((x, y))
 
-    canvas.create_line(*points, fill=accent, width=3, smooth=True)
+    if len(points) >= 4:
+        canvas.create_line(*points, fill=accent, width=3, smooth=True)
 
     canvas.create_text(width - right, top, anchor="ne",
                        text=f"{high:.1f} {unit}", fill=MUTED,
