@@ -479,15 +479,15 @@ humidity_var = tk.StringVar(value="-- %")
 pressure_var = tk.StringVar(value="---- hPa")
 altitude_var = tk.StringVar(value="-- m")
 
-temp_value = tk.Label(card1, textvariable=temperature_var, bg=PANEL, fg=TEXT,
+temp_value = tk.Label(card1, text="-- °C", bg=PANEL, fg=TEXT,
                       font=("Arial", 23, "bold"))
 temp_value.pack(anchor="w", padx=12, pady=(1, 8))
 
-humidity_value = tk.Label(card2, textvariable=humidity_var, bg=PANEL, fg=TEXT,
+humidity_value = tk.Label(card2, text="-- %", bg=PANEL, fg=TEXT,
                           font=("Arial", 23, "bold"))
 humidity_value.pack(anchor="w", padx=12, pady=(1, 8))
 
-pressure_value = tk.Label(card3, textvariable=pressure_var, bg=PANEL, fg=TEXT,
+pressure_value = tk.Label(card3, text="---- hPa", bg=PANEL, fg=TEXT,
                           font=("Arial", 23, "bold"))
 pressure_value.pack(anchor="w", padx=12, pady=(1, 8))
 
@@ -531,7 +531,7 @@ temp_range_value.pack(anchor="w", padx=12, pady=(1, 10))
 
 tk.Label(info, text="ALTITUDE", bg=PANEL, fg=MUTED,
          font=("Arial", 9, "bold")).pack(anchor="w", padx=12)
-altitude_value = tk.Label(info, textvariable=altitude_var, bg=PANEL, fg=TEXT,
+altitude_value = tk.Label(info, text="-- m", bg=PANEL, fg=TEXT,
                           font=("Arial", 16, "bold"))
 altitude_value.pack(anchor="w", padx=12, pady=(1, 10))
 
