@@ -1,62 +1,111 @@
-# Smart Weather System
+# RPi Weather Observatory
 
-Raspberry Pi 1 Model B+ + BME280 weather station for a science exhibition.
-
-## Main display
-
-**RPi Weather Observatory:** https://weather-station-dash.preview.emergentagent.com/
-
-The Raspberry Pi uses the native **Tkinter Smart Weather Station** application.
-
-- No Chromium required
-- No web browser required
-- Starts automatically after graphical login
-- Full-screen dashboard
-- TEST Mode works without a sensor
-- LIVE Mode is reserved for the BME280
-- Large TEST MODE / LIVE MODE buttons
-- Temperature and pressure graphs
-- Temperature minimum/maximum
-- Rain indicator (simulated in TEST Mode; a separate rain sensor is required for real rain detection)
+A lightweight Raspberry Pi 1 Model B+ weather station for a science exhibition.
 
 ## Hardware
 
-BME280 I2C breakout:
-- VCC -> 3.3V
-- GND -> GND
-- SDA -> GPIO 2 / SDA
-- SCL -> GPIO 3 / SCL
+- Raspberry Pi 1 Model B+
+- BMP180: temperature + atmospheric pressure
+- DHT22: humidity + temperature
+- DS3231: real-time clock
+- LM393 raindrop sensor: rain/dry
+- Breadboard and jumper wires
 
-Do not connect a 3.3V BME280 module to 5V logic.
+## Wiring
+
+| Module | Pin | Raspberry Pi |
+|---|---|---|
+| BMP180 | VCC | 3.3V, physical 1 |
+| BMP180 | GND | GND, physical 6 |
+| BMP180 | SDA | GPIO2/SDA, physical 3 |
+| BMP180 | SCL | GPIO3/SCL, physical 5 |
+| DHT22 | VCC | 3.3V |
+| DHT22 | DATA | GPIO4, physical 7 |
+| DHT22 | GND | GND |
+| DS3231 | SDA | GPIO2/SDA, physical 3 |
+| DS3231 | SCL | GPIO3/SCL, physical 5 |
+| DS3231 | GND | GND |
+| DS3231 | VCC | Use the voltage required by your exact module |
+| Rain module | DO | GPIO17, physical 11 |
+| Rain module | GND | GND |
+| Rain module | VCC | 3.3V |
+
+BMP180 and DS3231 share the I2C SDA/SCL bus.
+
+**DS3231 warning:** common ZS-042 boards can include a charging circuit intended for rechargeable cells. Verify the exact board before fitting a non-rechargeable CR2032.
+
+## Dashboard
+
+The native Tkinter dashboard provides:
+
+- TEST / LIVE modes
+- Temperature
+- Humidity
+- Atmospheric pressure
+- Approximate altitude
+- Rain / dry status
+- DS3231 date and time
+- Temperature minimum / maximum
+- Temperature, humidity and pressure history graphs
+- Individual sensor error reporting
+- Full-screen exhibition view
+- Automatic graphical-login startup
+
+It does not use Chromium, a web browser, React, Electron or Matplotlib.
+
+## TEST mode
+
+TEST mode works with no sensors connected. It generates realistic changing weather data so the exhibition dashboard can be demonstrated before hardware is attached.
+
+## LIVE mode
+
+LIVE mode reads:
+
+- BMP180 over I2C address normally 0x77
+- DHT22 on GPIO4
+- DS3231 over I2C address 0x68
+- Rain sensor DO on GPIO17
+
+A missing sensor is reported instead of crashing the dashboard.
 
 ## Installation
 
-1. Use Raspberry Pi Imager to write the appropriate Raspberry Pi OS image for the Pi 1 B+.
-2. Configure the normal Raspberry Pi user and graphical desktop.
-3. Copy `pi-boot/user-data` and `pi-boot/meta-data` to the SD card boot partition.
-4. Copy the repository contents into a folder named `weather-system` on that boot partition.
-5. Insert the SD card and power on.
-6. The first-boot installer installs Tkinter and configures the desktop to launch `weather_station.py` automatically.
-7. The weather dashboard starts full-screen after graphical login.
-
-The application starts in Test Mode so it can be demonstrated before the BME280 is connected.
-
-## Manual setup
-
-If you already cloned the repository:
+From the repository directory:
 
 ```bash
-sudo apt update
-sudo apt install -y python3-tk
-python3 weather_station.py
+sudo bash install.sh
+sudo reboot
 ```
 
-For automatic startup, see `RASPBERRY_PI_DESKTOP_SETUP.md`.
+The installer enables I2C, installs the required Python packages, copies the dashboard and sensor drivers to `/opt/smart-weather-system`, and creates a desktop autostart entry.
 
-## Project layout
+## Check I2C
 
-- `weather_station.py` - native full-screen Tkinter dashboard
-- `install.sh` - first-boot installer and desktop autostart setup
-- `pi-boot/` - first-boot files
-- `README.md` - project documentation
-- `RASPBERRY_PI_DESKTOP_SETUP.md` - desktop setup instructions
+After reboot:
+
+```bash
+sudo i2cdetect -y 1
+```
+
+You should normally see the BMP180 at `77` and DS3231 at `68`.
+
+## Manual run
+
+```bash
+python3 /opt/smart-weather-system/weather_station.py
+```
+
+Windowed development mode:
+
+```bash
+python3 /opt/smart-weather-system/weather_station.py --windowed
+```
+
+## Project files
+
+- `weather_station.py` - native Tkinter dashboard
+- `sensors/bmp180.py` - BMP180 I2C driver
+- `sensors/dht22.py` - DHT22 driver
+- `sensors/ds3231.py` - DS3231 I2C reader
+- `sensors/rain_sensor.py` - GPIO17 rain detector
+- `install.sh` - Raspberry Pi installation and autostart
