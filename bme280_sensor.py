@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-"""BME280 sensor reader with lightweight TEST mode simulation."""
+"""BME280 sensor helper with lightweight simulated TEST mode."""
+
 import random
 import threading
 
 
 class BME280Sensor:
-    """BME280 reader with a lightweight simulation mode for testing.
-    
-    LIVE mode: Reads real BME280 sensor via I2C (auto-detect 0x76 or 0x77)
-    TEST mode: Generates realistic simulated weather data
-    """
+    """Read a real BME280 sensor or generate realistic test data."""
 
     def __init__(self, test_mode=True):
         self.test_mode = test_mode
@@ -25,14 +22,22 @@ class BME280Sensor:
             "mode": "TEST",
             "rain": False,
         }
-        self._rain_pattern = 0  # For rain simulation
         self._lock = threading.Lock()
-
+        self._rain_bias = 0.5
         if not self.test_mode:
             self._connect()
 
+    def _reset_bus(self):
+        if self.bus is not None:
+            try:
+                self.bus.close()
+            except Exception:
+                pass
+        self.bus = None
+        self.address = None
+        self.calibration = None
+
     def _connect(self):
-        """Attempt to connect to BME280 at I2C addresses 0x76 or 0x77."""
         try:
             import smbus2
             import bme280
@@ -48,7 +53,7 @@ class BME280Sensor:
                     self.bus = bus
                     self.address = address
                     self.calibration = calibration
-                    print(f"[BME280] Found at I²C address {hex(address)}")
+                    print(f"[BME280] Found at I2C address 0x{address:02x}")
                     return
                 except Exception:
                     if bus is not None:
@@ -57,18 +62,13 @@ class BME280Sensor:
                         except Exception:
                             pass
 
-            print("[BME280] Not found at I²C 0x76 or 0x77")
-            self.bus = None
-            self.address = None
-            self.calibration = None
+            print("[BME280] No device found at I2C address 0x76 or 0x77")
+            self._reset_bus()
         except Exception as error:
-            print(f"[BME280] Library error: {error}")
-            self.bus = None
-            self.address = None
-            self.calibration = None
+            print(f"[BME280] Import/setup error: {error}")
+            self._reset_bus()
 
     def _read_real(self):
-        """Read actual BME280 sensor data."""
         if self.bus is None:
             self._connect()
 
@@ -80,14 +80,13 @@ class BME280Sensor:
                 "altitude": None,
                 "sensor_ok": False,
                 "mode": "BME280",
-                "rain": False,
+                "rain": self._read_rain_sensor(),
             }
 
         try:
             data = self.bme280.sample(self.bus, self.address, self.calibration)
             pressure = float(data.pressure)
             altitude = 44330.0 * (1.0 - (pressure / 1013.25) ** 0.1903)
-
             return {
                 "temperature": round(float(data.temperature), 1),
                 "humidity": round(float(data.humidity), 1),
@@ -98,9 +97,7 @@ class BME280Sensor:
                 "rain": self._read_rain_sensor(),
             }
         except Exception:
-            self.bus = None
-            self.address = None
-            self.calibration = None
+            self._reset_bus()
             return {
                 "temperature": None,
                 "humidity": None,
@@ -111,20 +108,31 @@ class BME280Sensor:
                 "rain": False,
             }
 
+    def _read_rain_sensor(self):
+        """Optional GPIO17 rain sensor support.
+        Returns True when rain is detected; returns False if not available.
+        """
+        try:
+            import RPi.GPIO as GPIO
+
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            rain_detected = GPIO.input(17) == 0
+            GPIO.cleanup(17)
+            return rain_detected
+        except Exception:
+            return False
+
     def _read_test(self):
-        """Generate realistic simulated weather data."""
-        old = self.last
-        
-        # Realistic weather patterns with daily cycles
-        temperature = max(18.0, min(42.0, old["temperature"] + random.uniform(-0.25, 0.25)))
-        humidity = max(20.0, min(95.0, old["humidity"] + random.uniform(-0.8, 0.8)))
-        pressure = max(980.0, min(1030.0, old["pressure"] + random.uniform(-0.7, 0.7)))
+        previous = self.last
+        temperature = max(18.0, min(42.0, previous["temperature"] + random.uniform(-0.35, 0.35)))
+        humidity = max(20.0, min(95.0, previous["humidity"] + random.uniform(-0.8, 0.8)))
+        pressure = max(980.0, min(1035.0, previous["pressure"] + random.uniform(-0.8, 0.8)))
         altitude = 44330.0 * (1.0 - (pressure / 1013.25) ** 0.1903)
-        
-        # Realistic rain pattern (occasional rain events)
-        self._rain_pattern += random.uniform(-0.1, 0.1)
-        self._rain_pattern = max(0, min(1.0, self._rain_pattern))
-        rain = self._rain_pattern > 0.7  # Rain occurs ~30% of the time on average
+
+        self._rain_bias += random.uniform(-0.1, 0.1)
+        self._rain_bias = max(0.0, min(1.0, self._rain_bias))
+        rain = random.random() < 0.25 or (previous.get("rain", False) and random.random() < 0.70)
 
         self.last = {
             "temperature": round(temperature, 1),
@@ -137,34 +145,7 @@ class BME280Sensor:
         }
         return dict(self.last)
 
-    def _read_rain_sensor(self):
-        """Read rain sensor from GPIO17 (real hardware).
-        
-        Returns True if rain is detected (GPIO17 low/active).
-        """
-        try:
-            import RPi.GPIO as GPIO
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(17, GPIO.IN)
-            rain = not GPIO.input(17)  # Active low
-            GPIO.cleanup(17)
-            return rain
-        except Exception:
-            # GPIO not available or sensor not connected
-            return False
-
     def read(self):
-        """Read sensor data (real or simulated).
-        
-        Returns a dict with keys:
-          - temperature: float (°C)
-          - humidity: float (%)
-          - pressure: float (hPa)
-          - altitude: float (m)
-          - sensor_ok: bool
-          - mode: str ("TEST" or "BME280")
-          - rain: bool
-        """
         with self._lock:
             if self.test_mode:
                 return self._read_test()
@@ -175,14 +156,7 @@ class BME280Sensor:
                 return result
             except Exception as error:
                 print(f"[BME280] Read error: {error}")
-                if self.bus is not None:
-                    try:
-                        self.bus.close()
-                    except Exception:
-                        pass
-                self.bus = None
-                self.address = None
-                self.calibration = None
+                self._reset_bus()
                 return {
                     "temperature": None,
                     "humidity": None,
@@ -194,9 +168,9 @@ class BME280Sensor:
                 }
 
     def close(self):
-        """Cleanup resources."""
-        if self.bus is not None:
-            try:
-                self.bus.close()
-            except Exception:
-                pass
+        self._reset_bus()
+
+
+if __name__ == "__main__":
+    sensor = BME280Sensor(test_mode=True)
+    print(sensor.read())
