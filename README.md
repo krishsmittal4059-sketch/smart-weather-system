@@ -4,6 +4,8 @@ Raspberry Pi 1 Model B+ + BME280 weather station for a science exhibition.
 
 ## Main display
 
+**RPi Weather Observatory:** https://weather-station-dash.preview.emergentagent.com/
+
 The Raspberry Pi uses the native **Tkinter Smart Weather Station** application.
 
 - No Chromium required
