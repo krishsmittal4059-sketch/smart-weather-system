@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""SMART WEATHER SYSTEM - Raspberry Pi 1 friendly Tkinter dashboard."""
+"""RPi Weather Observatory - lightweight Raspberry Pi Tkinter dashboard."""
+
 import math
 import sys
 import tkinter as tk
@@ -10,156 +11,414 @@ from bme280_sensor import BME280Sensor
 
 UPDATE_MS = 2000
 MAX_POINTS = 90
-SMOOTH_LINES = False
-REQUIRED_KEYS = ("temperature", "humidity", "pressure", "altitude")
 FONT = "Helvetica"
-APP_BG="#070B10"; HEADER_BG="#0D141B"; PANEL="#101820"; PANEL_2="#141F29"
-NAV_ACTIVE="#1E2B35"; BORDER="#263541"; GRID="#1D2932"; TEXT="#F3F7FA"
-MUTED="#81909D"; DISABLED="#697783"; CYAN="#55D9FF"; GREEN="#49E58A"
-YELLOW="#FFD34E"; RED="#FF6675"; PURPLE="#A98CFF"
 
-STATUS={
-("TEST",True):(("● SYSTEM ONLINE",GREEN),("SIMULATION • HARDWARE NOT REQUIRED",YELLOW),("SIMULATED SENSOR",YELLOW),"Test generator • safe for exhibition demo"),
-("TEST",False):(("● SIMULATOR ERROR",RED),("SIMULATION • GENERATOR FAILED",RED),("SIMULATOR ERROR",RED),"The test generator returned no valid data"),
-("LIVE",True):(("● BME280 ONLINE",GREEN),("LIVE • BME280 CONNECTED",GREEN),("BME280 ONLINE",GREEN),"I²C • automatic address scan 0x76 / 0x77"),
-("LIVE",False):(("● SENSOR OFFLINE",RED),("LIVE • BME280 NOT CONNECTED",RED),("BME280 OFFLINE",RED),"Check I²C wiring and address 0x76 / 0x77")}
+APP_BG = "#071922"
+HEADER_BG = "#0e2430"
+PANEL = "#122b39"
+PANEL_2 = "#1a3647"
+BORDER = "#2d4d5d"
+GRID = "#213f4c"
+TEXT = "#edf7fb"
+MUTED = "#9ab5c0"
+CYAN = "#5ad7ff"
+GREEN = "#69e69a"
+YELLOW = "#ffd166"
+RED = "#ff6b6b"
+PURPLE = "#9d8cff"
 
-def clamp(v,lo,hi): return max(lo,min(hi,v))
-def dew_point(t,h):
-    h=clamp(h,.1,100); a,b=17.62,243.12
-    g=math.log(h/100)+a*t/(b+t); return b*g/(a-g)
-def span(s): return f"{s/60:g} min" if s>=120 else f"{s:g} s"
 
-def label(parent,text="",fg=TEXT,size=10,bg=PANEL,bold=True,**kw):
-    return tk.Label(parent,text=text,bg=bg,fg=fg,font=(FONT,size,"bold" if bold else "normal"),**kw)
-def panel(parent): return tk.Frame(parent,bg=PANEL,highlightthickness=1,highlightbackground=BORDER)
-def button(parent,text,command,bg=PANEL_2,fg=TEXT,active_bg="#2A3944",active_fg=None,padx=14,pady=6):
-    return tk.Button(parent,text=text,command=command,bg=bg,fg=fg,activebackground=active_bg,activeforeground=active_fg or fg,font=(FONT,9,"bold"),bd=0,padx=padx,pady=pady,cursor="hand2")
+def clamp(value, low, high):
+    return max(low, min(high, value))
 
-class Gauge(tk.Canvas):
-    def __init__(self,parent,label_text,unit,minimum,maximum,accent,warn=None,danger=None):
-        super().__init__(parent,bg=PANEL,highlightthickness=1,highlightbackground=BORDER)
-        self.label=label_text; self.unit=unit; self.minimum=minimum; self.maximum=maximum; self.accent=accent; self.warn=warn; self.danger=danger; self.value=None; self.arc=None
-        self.bind("<Configure>",self.layout)
-    def layout(self,event=None):
-        w=max(180,self.winfo_width()); h=max(120,self.winfo_height()); self.cx=w/2; self.cy=h*.55; self.r=min(w*.34,h*.34); box=(self.cx-self.r,self.cy-self.r,self.cx+self.r,self.cy+self.r)
-        self.delete("all"); self.create_arc(*box,start=135,extent=-270,style="arc",outline=BORDER,width=12)
-        self.arc=self.create_arc(*box,start=135,extent=0,style="arc",outline=self.accent,width=12); self.needle=self.create_line(self.cx,self.cy,self.cx,self.cy,fill=TEXT,width=3)
-        self.create_oval(self.cx-5,self.cy-5,self.cx+5,self.cy+5,fill=TEXT,outline=""); self.readout=self.create_text(self.cx,self.cy+28,fill=TEXT,font=(FONT,19,"bold")); self.create_text(self.cx,18,text=self.label,fill=MUTED,font=(FONT,10,"bold")); self.set_value(self.value)
-    def set_value(self,value):
-        self.value=value
-        if self.arc is None:return
-        if value is None:
-            self.itemconfigure(self.arc,extent=0); self.itemconfigure(self.needle,state="hidden"); self.itemconfigure(self.readout,text=f"-- {self.unit}"); return
-        ratio=clamp((value-self.minimum)/float(self.maximum-self.minimum),0,1); angle=math.radians(135-270*ratio); x=self.cx+self.r*.76*math.cos(angle); y=self.cy-self.r*.76*math.sin(angle)
-        color=RED if self.danger is not None and value>=self.danger else YELLOW if self.warn is not None and value>=self.warn else self.accent
-        self.itemconfigure(self.arc,extent=-270*ratio,outline=color); self.coords(self.needle,self.cx,self.cy,x,y); self.itemconfigure(self.needle,state="normal"); self.itemconfigure(self.readout,text=f"{value:.1f} {self.unit}")
 
-class LineChart(tk.Canvas):
-    L,R,T,B=16,16,42,24
-    def __init__(self,parent,title,unit,accent):
-        super().__init__(parent,bg=PANEL,highlightthickness=1,highlightbackground=BORDER); self.title=title; self.unit=unit; self.accent=accent; self.values=(); self.line=None; self.bind("<Configure>",self.layout)
-    def layout(self,event=None):
-        self.w=max(250,self.winfo_width()); self.h=max(150,self.winfo_height()); gh=self.h-self.T-self.B; self.delete("all")
-        for f in (.25,.5,.75): self.create_line(self.L,self.T+gh*f,self.w-self.R,self.T+gh*f,fill=GRID)
-        self.create_text(14,12,anchor="nw",text=self.title,fill=TEXT,font=(FONT,12,"bold")); self.create_text(self.L,self.h-5,anchor="sw",text=f"-{span(MAX_POINTS*UPDATE_MS/1000)}",fill=MUTED,font=(FONT,9)); self.create_text(self.w-self.R,self.h-5,anchor="se",text="now",fill=MUTED,font=(FONT,9))
-        self.empty=self.create_text(self.w/2,self.h/2,text="Waiting for measurements...",fill=MUTED,font=(FONT,11)); self.range=self.create_text(self.w-self.R,14,anchor="ne",fill=MUTED,font=(FONT,9)); self.line=self.create_line(0,0,0,0,fill=self.accent,width=3,smooth=SMOOTH_LINES,state="hidden"); self.dot=self.create_oval(0,0,0,0,fill=self.accent,outline="",state="hidden"); self.set_data(self.values)
-    def set_data(self,values):
-        self.values=values
-        if self.line is None:return
-        vals=list(values)
-        if not vals:
-            self.itemconfigure(self.empty,state="normal"); self.itemconfigure(self.line,state="hidden"); self.itemconfigure(self.dot,state="hidden"); self.itemconfigure(self.range,state="hidden"); return
-        lo,hi=min(vals),max(vals); pad=max(abs(hi)*.01,1) if hi==lo else (hi-lo)*.08; floor,ceil=lo-pad,hi+pad; gw=self.w-self.L-self.R; gh=self.h-self.T-self.B; step=gw/(MAX_POINTS-1); offset=MAX_POINTS-len(vals); pts=[]
-        for i,v in enumerate(vals): pts += [self.L+(offset+i)*step,self.T+(ceil-v)*gh/(ceil-floor)]
-        x,y=pts[-2:]; self.coords(self.dot,x-4,y-4,x+4,y+4); self.itemconfigure(self.dot,state="normal"); self.itemconfigure(self.empty,state="hidden"); self.itemconfigure(self.range,state="normal",text=f"min {lo:.1f}   max {hi:.1f} {self.unit}")
-        if len(vals)>1:self.coords(self.line,*pts); self.itemconfigure(self.line,state="normal")
-        else:self.itemconfigure(self.line,state="hidden")
+class HistoryGraph(tk.Canvas):
+    """Simple line graph drawn directly on a Tkinter Canvas."""
+
+    def __init__(self, parent, title, unit, color):
+        super().__init__(parent, bg=PANEL, highlightthickness=1, highlightbackground=BORDER)
+        self.title = title
+        self.unit = unit
+        self.color = color
+        self.values = []
+        self.bind("<Configure>", self.redraw)
+
+    def set_data(self, values):
+        self.values = list(values)
+        self.redraw()
+
+    def redraw(self, event=None):
+        if self.winfo_width() < 20 or self.winfo_height() < 20:
+            return
+        width = self.winfo_width()
+        height = self.winfo_height()
+        left, right, top, bottom = 18, 12, 18, 16
+        chart_width = width - left - right
+        chart_height = height - top - bottom
+        self.delete("all")
+
+        for ratio in (0.25, 0.5, 0.75):
+            y = top + chart_height * ratio
+            self.create_line(left, y, width - right, y, fill=GRID, width=1)
+
+        title = self.create_text(12, 10, anchor="nw", text=self.title, fill=TEXT, font=(FONT, 11, "bold"))
+        _ = title
+
+        if not self.values:
+            self.create_text(width / 2, height / 2, text="Waiting for readings ...", fill=MUTED,
+                             font=(FONT, 10, "normal"))
+            return
+
+        values = self.values
+        minimum = min(values)
+        maximum = max(values)
+        if minimum == maximum:
+            minimum -= 1.0
+            maximum += 1.0
+
+        pad = (maximum - minimum) * 0.1 or 1.0
+        minimum -= pad
+        maximum += pad
+
+        points = []
+        for idx, value in enumerate(values):
+            x = left + (idx / max(1, len(values) - 1)) * chart_width
+            y = top + chart_height - ((value - minimum) / (maximum - minimum or 1.0)) * chart_height
+            points.extend([x, y])
+
+        if len(points) >= 4:
+            self.create_line(*points, fill=self.color, width=2, smooth=True)
+            last_x, last_y = points[-2], points[-1]
+            self.create_oval(last_x - 3, last_y - 3, last_x + 3, last_y + 3, fill=self.color, outline=self.color)
+
+        self.create_text(width - 8, 10, anchor="ne", text=f"{maximum:.1f}{self.unit}", fill=MUTED,
+                         font=(FONT, 9, "normal"))
+
 
 class WeatherApp:
-    def __init__(self,root,fullscreen=True):
-        self.root=root; self.mode="TEST"; self.page="DASHBOARD"; self.sensor=BME280Sensor(test_mode=True); self.history={k:deque(maxlen=MAX_POINTS) for k in ("temperature","humidity","pressure")}; self.latest=None; self.t_min=None; self.t_max=None; self.sample_job=None; self.clock_job=None; self.fullscreen=fullscreen
-        self.build_window(); self.build_header(); self.build_nav(); self.build_footer(); self.build_pages(); self.show_page("DASHBOARD"); self.set_mode("TEST"); self.tick_clock()
-    def build_window(self):
-        self.root.title("Smart Weather System — Advanced Station Console"); self.root.configure(bg=APP_BG); self.root.attributes("-fullscreen",self.fullscreen); self.root.minsize(800,480); self.root.bind("<Escape>",lambda e:self.set_fullscreen(False)); self.root.bind("<F11>",lambda e:self.set_fullscreen(not self.fullscreen)); self.root.bind("<Control-q>",lambda e:self.close()); self.root.protocol("WM_DELETE_WINDOW",self.close)
-    def set_fullscreen(self,v): self.fullscreen=v; self.root.attributes("-fullscreen",v)
-    def close(self):
-        for job in (self.sample_job,self.clock_job):
-            if job:
-                try:self.root.after_cancel(job)
-                except tk.TclError:pass
-        close=getattr(self.sensor,"close",None)
-        if callable(close):
-            try:close()
-            except Exception:pass
-        self.root.destroy()
-    def build_header(self):
-        h=tk.Frame(self.root,bg=HEADER_BG,height=70); h.pack(fill="x",padx=6,pady=(6,2)); h.pack_propagate(False); b=tk.Frame(h,bg=HEADER_BG); b.pack(side="left",padx=18); label(b,"◈",fg=CYAN,size=26,bg=HEADER_BG).pack(side="left",padx=(0,10)); label(b,"SMART WEATHER",size=20,bg=HEADER_BG).pack(anchor="w"); label(b,"ADVANCED STATION CONSOLE",fg=MUTED,size=8,bg=HEADER_BG).pack(anchor="w"); self.mode_label=label(h,"TEST",fg=YELLOW,size=13,bg=HEADER_BG); self.mode_label.pack(side="left",padx=22); self.connection=label(h,"",size=11,bg=HEADER_BG); self.connection.pack(side="left"); self.clock=label(h,"",size=12,bg=HEADER_BG); self.clock.pack(side="right",padx=18)
-    def build_nav(self):
-        n=tk.Frame(self.root,bg=APP_BG); n.pack(fill="x",padx=12,pady=3); self.nav={}
-        for p in ("DASHBOARD","ANALYTICS"):
-            x=button(n,p,lambda p=p:self.show_page(p),fg=MUTED,active_fg=CYAN,padx=18); x.pack(side="left",padx=3); self.nav[p]=x
-        self.mode_button=button(n,"SWITCH TO LIVE",self.toggle_mode,bg="#075D31",active_bg="#078A48"); self.mode_button.pack(side="right",padx=3); self.status=label(self.root,"",size=9,bg=APP_BG); self.status.pack(pady=1)
-    def build_footer(self):
-        f=tk.Frame(self.root,bg=HEADER_BG,height=42); f.pack(side="bottom",fill="x",padx=6,pady=(2,6)); f.pack_propagate(False); button(f,"RESET HISTORY",self.clear_history,padx=12,pady=5).pack(side="left",padx=(10,5),pady=5); label(f,"ESC  EXIT FULLSCREEN   •   F11  TOGGLE FULLSCREEN   •   CTRL+Q  QUIT",fg=MUTED,size=8,bg=HEADER_BG).pack(side="left",padx=12); label(f,f"REFRESH  {UPDATE_MS/1000:g}s",fg=MUTED,size=8,bg=HEADER_BG).pack(side="right",padx=15)
-    def build_pages(self):
-        s=tk.Frame(self.root,bg=APP_BG); s.pack(fill="both",expand=True,padx=8,pady=2); self.dashboard=tk.Frame(s,bg=APP_BG); self.analytics=tk.Frame(s,bg=APP_BG); self.dashboard.place(relx=0,rely=0,relwidth=1,relheight=1); self.analytics.place(relx=0,rely=0,relwidth=1,relheight=1); self.build_dashboard(); self.build_analytics()
-    def card(self,p,c,title,value):
-        x=panel(p); x.grid(row=0,column=c,sticky="nsew",padx=5,pady=5); label(x,title,fg=MUTED,size=11).pack(anchor="w",padx=12,pady=(8,0)); v=label(x,value,size=23); v.pack(anchor="w",padx=12,pady=(1,8)); return v
-    def build_dashboard(self):
-        p=self.dashboard
-        for c in range(3):p.grid_columnconfigure(c,weight=1)
-        p.grid_rowconfigure(1,weight=1); p.grid_rowconfigure(2,weight=1)
-        self.temp_value=self.card(p,0,"TEMPERATURE","-- °C"); self.humidity_value=self.card(p,1,"HUMIDITY","-- %"); self.pressure_value=self.card(p,2,"PRESSURE","---- hPa")
-        self.temp_gauge=Gauge(p,"TEMPERATURE","°C",0,50,CYAN,35,42); self.humidity_gauge=Gauge(p,"HUMIDITY","%",0,100,GREEN); self.pressure_gauge=Gauge(p,"PRESSURE","hPa",950,1050,PURPLE)
-        for c,g in enumerate((self.temp_gauge,self.humidity_gauge,self.pressure_gauge)):g.grid(row=1,column=c,sticky="nsew",padx=5,pady=5)
-        self.temp_chart=LineChart(p,"TEMPERATURE TREND","°C",CYAN); self.pressure_chart=LineChart(p,"PRESSURE TREND","hPa",PURPLE); self.temp_chart.grid(row=2,column=0,sticky="nsew",padx=5,pady=5); self.pressure_chart.grid(row=2,column=1,sticky="nsew",padx=5,pady=5)
-        info=panel(p); info.grid(row=2,column=2,sticky="nsew",padx=5,pady=5); label(info,"STATION HEALTH",fg=MUTED,size=11).pack(anchor="w",padx=12,pady=(10,8)); self.sensor_state=label(info,"",size=14); self.sensor_state.pack(anchor="w",padx=12); self.sensor_detail=label(info,"",fg=MUTED,size=9,bold=False,wraplength=260,justify="left"); self.sensor_detail.pack(anchor="w",padx=12,pady=(3,12)); label(info,"TEMPERATURE RANGE",fg=MUTED,size=9).pack(anchor="w",padx=12); self.range=label(info,"-- / -- °C",size=16); self.range.pack(anchor="w",padx=12,pady=(1,10)); label(info,"ALTITUDE",fg=MUTED,size=9).pack(anchor="w",padx=12); self.altitude=label(info,"-- m",size=16); self.altitude.pack(anchor="w",padx=12,pady=(1,10)); label(info,"DEW POINT",fg=MUTED,size=9).pack(anchor="w",padx=12); self.dew=label(info,"-- °C",size=16); self.dew.pack(anchor="w",padx=12,pady=(1,10)); label(info,"RAIN SENSOR",fg=DISABLED,size=9).pack(anchor="w",padx=12); label(info,"NOT CONNECTED",fg=DISABLED,size=12).pack(anchor="w",padx=12,pady=(1,10)); self.last=label(info,"Waiting for measurement...",fg=MUTED,size=9,bold=False); self.last.pack(anchor="w",padx=12,pady=4)
-    def build_analytics(self):
-        p=self.analytics
-        for c in range(2):p.grid_columnconfigure(c,weight=1)
-        for r in range(3):p.grid_rowconfigure(r,weight=1)
-        self.analytic_temp=LineChart(p,"TEMPERATURE HISTORY","°C",CYAN); self.analytic_pressure=LineChart(p,"PRESSURE HISTORY","hPa",PURPLE); self.analytic_humidity=LineChart(p,"HUMIDITY HISTORY","%",GREEN); self.analytic_temp.grid(row=0,column=0,sticky="nsew",padx=5,pady=5); self.analytic_pressure.grid(row=0,column=1,sticky="nsew",padx=5,pady=5); self.analytic_humidity.grid(row=1,column=0,columnspan=2,sticky="nsew",padx=5,pady=5); self.stats=label(p,"Waiting for measurements...",size=11,bg=PANEL_2); self.stats.grid(row=2,column=0,columnspan=2,sticky="ew",padx=18,pady=8)
-    def show_page(self,p):
-        self.page=p; (self.dashboard if p=="DASHBOARD" else self.analytics).tkraise()
-        for n,b in self.nav.items():b.config(bg=NAV_ACTIVE if n==p else PANEL_2,fg=CYAN if n==p else MUTED)
-        self.redraw()
-    def toggle_mode(self):self.set_mode("LIVE" if self.mode=="TEST" else "TEST")
-    def set_mode(self,m):
-        self.mode=m; self.clear_history(False)
-        self.mode_label.config(text=m,fg=YELLOW if m=="TEST" else GREEN); self.mode_button.config(text="SWITCH TO LIVE" if m=="TEST" else "SWITCH TO TEST",bg="#075D31" if m=="TEST" else "#5C4D00",activebackground="#078A48" if m=="TEST" else "#806E00"); self.sample()
-    def read(self):
-        try:self.sensor.test_mode=self.mode=="TEST"; d=self.sensor.read()
-        except Exception:return None
-        if not isinstance(d,dict) or (self.mode=="LIVE" and not d.get("sensor_ok",False)):return None
-        try:r={k:float(d[k]) for k in REQUIRED_KEYS}
-        except (KeyError,TypeError,ValueError):return None
-        return None if any(math.isnan(v) or math.isinf(v) for v in r.values()) else r
-    def sample(self):
-        self.sample_job=None; d=self.read()
-        if d is None:self.latest=None; self.offline()
-        else:self.latest=d; self.record(d); self.online(d)
-        self.redraw(); self.sample_job=self.root.after(UPDATE_MS,self.sample)
-    def record(self,d):
-        t=d["temperature"]; self.t_min=t if self.t_min is None else min(self.t_min,t); self.t_max=t if self.t_max is None else max(self.t_max,t); [self.history[k].append(d[k]) for k in self.history]
-    def online(self,d):
-        self.temp_value.config(text=f"{d['temperature']:.1f} °C"); self.humidity_value.config(text=f"{d['humidity']:.1f} %"); self.pressure_value.config(text=f"{d['pressure']:.1f} hPa"); self.altitude.config(text=f"{d['altitude']:.1f} m"); self.dew.config(text=f"{dew_point(d['temperature'],d['humidity']):.1f} °C"); self.range.config(text=f"{self.t_min:.1f} / {self.t_max:.1f} °C"); s=STATUS[(self.mode,True)]; self.set_status(s); self.last.config(text=f"Last sample  {datetime.now().strftime('%H:%M:%S')}")
-    def offline(self):
-        self.temp_value.config(text="-- °C"); self.humidity_value.config(text="-- %"); self.pressure_value.config(text="---- hPa"); self.altitude.config(text="-- m"); self.dew.config(text="-- °C"); self.range.config(text="-- / -- °C"); self.last.config(text="No valid reading"); self.set_status(STATUS[(self.mode,False)])
-    def set_status(self,s):
-        (a,ac),(b,bc),(c,cc),detail=s; self.connection.config(text=a,fg=ac); self.status.config(text=b,fg=bc); self.sensor_state.config(text=c,fg=cc); self.sensor_detail.config(text=detail)
-    def redraw(self):
-        if self.page=="DASHBOARD":
-            d=self.latest or {}; self.temp_gauge.set_value(d.get("temperature")); self.humidity_gauge.set_value(d.get("humidity")); self.pressure_gauge.set_value(d.get("pressure")); self.temp_chart.set_data(self.history["temperature"]); self.pressure_chart.set_data(self.history["pressure"])
+    def __init__(self, root, fullscreen=True):
+        self.root = root
+        self.fullscreen = fullscreen
+        self.mode = "TEST"
+        self.sensor = BME280Sensor(test_mode=True)
+        self.history = {
+            "temperature": deque(maxlen=MAX_POINTS),
+            "humidity": deque(maxlen=MAX_POINTS),
+            "pressure": deque(maxlen=MAX_POINTS),
+        }
+        self.temp_min = None
+        self.temp_max = None
+        self.latest = {}
+        self.sample_job = None
+        self.clock_job = None
+
+        self.root.title("RPi Weather Observatory")
+        self.root.configure(bg=APP_BG)
+        self.root.minsize(980, 620)
+        self.root.geometry("1280x780")
+        self.root.bind("<Escape>", self._escape_handler)
+        self.root.bind("<F11>", self._toggle_fullscreen)
+
+        self.build_ui()
+        self.set_mode("TEST")
+        self.tick_clock()
+        self.sample()
+
+    def _escape_handler(self, event=None):
+        if self.fullscreen:
+            self.set_fullscreen(False)
         else:
-            self.analytic_temp.set_data(self.history["temperature"]); self.analytic_pressure.set_data(self.history["pressure"]); self.analytic_humidity.set_data(self.history["humidity"]); v=list(self.history["temperature"]); self.stats.config(text="Waiting for measurements..." if not v else f"SAMPLES  {len(v)}    AVG TEMP  {sum(v)/len(v):.1f} °C    MIN  {min(v):.1f} °C    MAX  {max(v):.1f} °C")
-    def clear_history(self,redraw=True):
-        for v in self.history.values():v.clear()
-        self.latest=None; self.t_min=None; self.t_max=None
-        if hasattr(self,"range"):self.range.config(text="-- / -- °C")
-        if redraw:self.redraw()
-    def tick_clock(self):self.clock.config(text=datetime.now().strftime("%d %b %Y   %H:%M:%S")); self.clock_job=self.root.after(1000,self.tick_clock)
+            self.root.destroy()
+
+    def _toggle_fullscreen(self, event=None):
+        self.set_fullscreen(not self.fullscreen)
+
+    def set_fullscreen(self, value):
+        self.fullscreen = bool(value)
+        self.root.attributes("-fullscreen", self.fullscreen)
+
+    def build_ui(self):
+        top = tk.Frame(self.root, bg=HEADER_BG, height=74)
+        top.pack(fill="x", padx=10, pady=(10, 6))
+        top.pack_propagate(False)
+
+        left = tk.Frame(top, bg=HEADER_BG)
+        left.pack(side="left", padx=18, pady=10, anchor="w")
+        tk.Label(left, text="◌", fg=CYAN, bg=HEADER_BG, font=(FONT, 18, "bold")).pack(side="left")
+        tk.Label(left, text="RPi Weather Observatory", fg=TEXT, bg=HEADER_BG,
+                 font=(FONT, 22, "bold")).pack(side="left", padx=(10, 0))
+
+        right = tk.Frame(top, bg=HEADER_BG)
+        right.pack(side="right", padx=12, pady=8)
+
+        self.mode_button = tk.Button(
+            right, text="TEST MODE", command=self.toggle_mode,
+            bg="#1b4c5f", fg=TEXT, activebackground="#246c84",
+            font=(FONT, 10, "bold"), bd=0, padx=12, pady=8, cursor="hand2"
+        )
+        self.mode_button.pack(side="left", padx=4)
+
+        tk.Button(right, text="FULL SCREEN", command=lambda: self.set_fullscreen(True),
+                  bg=PANEL_2, fg=TEXT, activebackground="#2a5873",
+                  font=(FONT, 10, "bold"), bd=0, padx=10, pady=8, cursor="hand2").pack(side="left", padx=4)
+        tk.Button(right, text="WINDOWED", command=lambda: self.set_fullscreen(False),
+                  bg=PANEL_2, fg=TEXT, activebackground="#2a5873",
+                  font=(FONT, 10, "bold"), bd=0, padx=10, pady=8, cursor="hand2").pack(side="left", padx=4)
+        tk.Button(right, text="RESET HISTORY", command=self.clear_history,
+                  bg=PANEL_2, fg=TEXT, activebackground="#2a5873",
+                  font=(FONT, 10, "bold"), bd=0, padx=10, pady=8, cursor="hand2").pack(side="left", padx=4)
+        tk.Button(right, text="EXIT", command=self.root.destroy,
+                  bg="#5a2d2d", fg=TEXT, activebackground="#7d3939",
+                  font=(FONT, 10, "bold"), bd=0, padx=10, pady=8, cursor="hand2").pack(side="left", padx=4)
+
+        status = tk.Frame(self.root, bg=APP_BG)
+        status.pack(fill="x", padx=10, pady=(0, 6))
+        self.status_line = tk.Label(status, text="TEST MODE • Simulation active", fg=YELLOW,
+                                    bg=APP_BG, font=(FONT, 10, "bold"))
+        self.status_line.pack(anchor="w")
+
+        body = tk.Frame(self.root, bg=APP_BG)
+        body.pack(fill="both", expand=True, padx=10, pady=0)
+
+        metrics = tk.Frame(body, bg=APP_BG)
+        metrics.pack(fill="x", pady=(0, 8))
+
+        metric_titles = [
+            ("Temperature", "°C", CYAN),
+            ("Humidity", "%", GREEN),
+            ("Pressure", "hPa", PURPLE),
+            ("Altitude", "m", YELLOW),
+        ]
+        self.metric_vars = {}
+        for idx, (name, unit, color) in enumerate(metric_titles):
+            card = tk.Frame(metrics, bg=PANEL, highlightthickness=1, highlightbackground=BORDER, padx=14, pady=14)
+            card.pack(side="left", fill="x", expand=True, padx=(0 if idx == 0 else 6, 0))
+            tk.Label(card, text=name, fg=MUTED, bg=PANEL, font=(FONT, 10, "bold")).pack(anchor="w")
+            value = tk.Label(card, text="--", fg=color, bg=PANEL, font=(FONT, 28, "bold"))
+            value.pack(anchor="w", pady=(8, 0))
+            self.metric_vars[name] = value
+
+        bottom = tk.Frame(body, bg=APP_BG)
+        bottom.pack(fill="both", expand=True)
+
+        left_panel = tk.Frame(bottom, bg=APP_BG)
+        left_panel.pack(side="left", fill="both", expand=True)
+
+        self.temp_graph = HistoryGraph(left_panel, "Temperature History", "°C", CYAN)
+        self.temp_graph.pack(fill="both", expand=True, padx=(0, 6), pady=(0, 6))
+        self.humidity_graph = HistoryGraph(left_panel, "Humidity History", "%", GREEN)
+        self.humidity_graph.pack(fill="both", expand=True, padx=(0, 6), pady=(0, 6))
+        self.pressure_graph = HistoryGraph(left_panel, "Pressure History", "hPa", PURPLE)
+        self.pressure_graph.pack(fill="both", expand=True, padx=(0, 6), pady=(0, 6))
+
+        right_panel = tk.Frame(bottom, bg=APP_BG, width=350)
+        right_panel.pack(side="right", fill="y", padx=(6, 0))
+        right_panel.pack_propagate(False)
+
+        info = tk.Frame(right_panel, bg=PANEL, highlightthickness=1, highlightbackground=BORDER)
+        info.pack(fill="both", expand=True)
+
+        label_style = dict(bg=PANEL, fg=MUTED, font=(FONT, 10, "bold"))
+        value_style = dict(bg=PANEL, fg=TEXT, font=(FONT, 14, "bold"))
+        row_pad = {"padx": 16, "pady": (8, 0)}
+
+        tk.Label(info, text="SYSTEM STATUS", **label_style).pack(anchor="w", **row_pad)
+        self.sensor_status = tk.Label(info, text="SIMULATOR READY", fg=YELLOW, **value_style)
+        self.sensor_status.pack(anchor="w", padx=16, pady=(0, 10))
+
+        tk.Label(info, text="OPERATING MODE", **label_style).pack(anchor="w", **row_pad)
+        self.mode_status = tk.Label(info, text="TEST", fg=YELLOW, **value_style)
+        self.mode_status.pack(anchor="w", padx=16, pady=(0, 10))
+
+        tk.Label(info, text="RAIN STATUS", **label_style).pack(anchor="w", **row_pad)
+        self.rain_status = tk.Label(info, text="--", fg=TEXT, **value_style)
+        self.rain_status.pack(anchor="w", padx=16, pady=(0, 10))
+
+        tk.Label(info, text="LAST UPDATE", **label_style).pack(anchor="w", **row_pad)
+        self.last_update = tk.Label(info, text="--:--:--", fg=TEXT, **value_style)
+        self.last_update.pack(anchor="w", padx=16, pady=(0, 10))
+
+        tk.Label(info, text="TEMPERATURE RANGE", **label_style).pack(anchor="w", **row_pad)
+        self.range_label = tk.Label(info, text="-- / -- °C", fg=TEXT, **value_style)
+        self.range_label.pack(anchor="w", padx=16, pady=(0, 10))
+
+        tk.Label(info, text="BME280 ADDRESS", **label_style).pack(anchor="w", **row_pad)
+        self.address_label = tk.Label(info, text="auto-detect", fg=TEXT, **value_style)
+        self.address_label.pack(anchor="w", padx=16, pady=(0, 12))
+
+        bottom_info = tk.Frame(right_panel, bg=PANEL, highlightthickness=1, highlightbackground=BORDER, pady=10)
+        bottom_info.pack(fill="x", pady=(8, 0))
+        tk.Label(bottom_info, text="SENSOR DETAIL", bg=PANEL, fg=MUTED, font=(FONT, 10, "bold")).pack(anchor="w", padx=16)
+        self.sensor_detail = tk.Label(bottom_info, text="Ready for science exhibition demo.",
+                                     bg=PANEL, fg=TEXT, wraplength=300, justify="left",
+                                     font=(FONT, 10, "normal"))
+        self.sensor_detail.pack(anchor="w", padx=16, pady=(6, 0))
+
+    def toggle_mode(self):
+        self.set_mode("LIVE" if self.mode == "TEST" else "TEST")
+
+    def set_mode(self, mode):
+        mode = mode.upper()
+        self.mode = mode
+        self.sensor.test_mode = (mode == "TEST")
+        if self.mode == "TEST":
+            self.status_line.config(text="TEST MODE • Simulation active", fg=YELLOW)
+            self.mode_button.config(text="LIVE MODE", bg="#1b4c5f", activebackground="#246c84")
+            self.mode_status.config(text="TEST", fg=YELLOW)
+            self.sensor_status.config(text="SIMULATOR READY", fg=YELLOW)
+            self.sensor_detail.config(text="Simulation active. No hardware required.")
+        else:
+            self.status_line.config(text="LIVE MODE • Reading BME280 sensor", fg=GREEN)
+            self.mode_button.config(text="TEST MODE", bg="#245f4d", activebackground="#2f7a62")
+            self.mode_status.config(text="LIVE", fg=GREEN)
+            self.sensor_status.config(text="CHECKING SENSOR", fg=GREEN)
+            self.sensor_detail.config(text="Scanning I²C for BME280 at 0x76 or 0x77.")
+        self.clear_history(False)
+
+    def clear_history(self, redraw=True):
+        for values in self.history.values():
+            values.clear()
+        self.temp_min = None
+        self.temp_max = None
+        self.range_label.config(text="-- / -- °C")
+        self.latest = {}
+        if redraw:
+            self.redraw()
+
+    def read_sensor(self):
+        try:
+            data = self.sensor.read()
+        except Exception as exc:
+            data = {
+                "temperature": None,
+                "humidity": None,
+                "pressure": None,
+                "altitude": None,
+                "sensor_ok": False,
+                "mode": self.mode,
+                "rain": False,
+                "error": str(exc),
+            }
+
+        if not isinstance(data, dict):
+            return {
+                "temperature": None,
+                "humidity": None,
+                "pressure": None,
+                "altitude": None,
+                "sensor_ok": False,
+                "mode": self.mode,
+                "rain": False,
+                "error": "Invalid sensor payload",
+            }
+
+        if data.get("mode") is None:
+            data["mode"] = self.mode
+        if "rain" not in data:
+            data["rain"] = False
+        if "sensor_ok" not in data:
+            data["sensor_ok"] = True
+        return data
+
+    def sample(self):
+        self.sample_job = None
+        data = self.read_sensor()
+        self.latest = data
+
+        try:
+            if data.get("sensor_ok"):
+                temp = float(data.get("temperature", 0.0))
+                humidity = float(data.get("humidity", 0.0))
+                pressure = float(data.get("pressure", 0.0))
+                if math.isfinite(temp) and math.isfinite(humidity) and math.isfinite(pressure):
+                    self.history["temperature"].append(temp)
+                    self.history["humidity"].append(humidity)
+                    self.history["pressure"].append(pressure)
+                    if self.temp_min is None or temp < self.temp_min:
+                        self.temp_min = temp
+                    if self.temp_max is None or temp > self.temp_max:
+                        self.temp_max = temp
+                else:
+                    data["sensor_ok"] = False
+            else:
+                data["error"] = data.get("error", "Sensor disconnected or unavailable.")
+        except (TypeError, ValueError):
+            data["sensor_ok"] = False
+            data["error"] = "Read failed."
+
+        self.last_update.config(text=datetime.now().strftime("%H:%M:%S"))
+        if self.temp_min is not None and self.temp_max is not None:
+            self.range_label.config(text=f"{self.temp_min:.1f} / {self.temp_max:.1f} °C")
+
+        self.redraw()
+        self.sample_job = self.root.after(UPDATE_MS, self.sample)
+
+    def redraw(self):
+        data = self.latest or {}
+        temp = data.get("temperature")
+        humidity = data.get("humidity")
+        pressure = data.get("pressure")
+        altitude = data.get("altitude")
+
+        if temp is None:
+            self.metric_vars["Temperature"].config(text="--")
+        else:
+            self.metric_vars["Temperature"].config(text=f"{float(temp):.1f}")
+
+        if humidity is None:
+            self.metric_vars["Humidity"].config(text="--")
+        else:
+            self.metric_vars["Humidity"].config(text=f"{float(humidity):.1f}")
+
+        if pressure is None:
+            self.metric_vars["Pressure"].config(text="----")
+        else:
+            self.metric_vars["Pressure"].config(text=f"{float(pressure):.1f}")
+
+        if altitude is None:
+            self.metric_vars["Altitude"].config(text="--")
+        else:
+            self.metric_vars["Altitude"].config(text=f"{float(altitude):.1f}")
+
+        if self.mode == "TEST":
+            self.sensor_status.config(text="SIMULATOR READY", fg=YELLOW)
+            self.mode_status.config(text="TEST", fg=YELLOW)
+            self.sensor_detail.config(text="Simulation active. No hardware required.")
+        elif data.get("sensor_ok"):
+            self.sensor_status.config(text="BME280 ONLINE", fg=GREEN)
+            self.mode_status.config(text="LIVE", fg=GREEN)
+            self.sensor_detail.config(text="BME280 detected and streaming live observations.")
+        else:
+            self.sensor_status.config(text="SENSOR OFFLINE", fg=RED)
+            self.mode_status.config(text="LIVE", fg=GREEN)
+            self.sensor_detail.config(text=data.get("error", "BME280 not detected. Check I²C wiring and address 0x76 / 0x77."))
+
+        if data.get("rain"):
+            self.rain_status.config(text="RAIN DETECTED", fg=YELLOW)
+        else:
+            self.rain_status.config(text="NO RAIN", fg=GREEN)
+
+        if self.mode == "TEST":
+            self.address_label.config(text="simulated")
+        elif self.sensor.address is not None:
+            self.address_label.config(text=f"0x{self.sensor.address:02x}")
+        else:
+            self.address_label.config(text="not found")
+
+        self.temp_graph.set_data(self.history["temperature"])
+        self.humidity_graph.set_data(self.history["humidity"])
+        self.pressure_graph.set_data(self.history["pressure"])
+
+    def tick_clock(self):
+        self.clock_job = self.root.after(1000, self.tick_clock)
+
 
 def main():
-    root=tk.Tk(); WeatherApp(root,fullscreen="--windowed" not in sys.argv); root.mainloop()
-if __name__=="__main__":main()
+    root = tk.Tk()
+    app = WeatherApp(root, fullscreen="--windowed" not in sys.argv)
+    app.set_fullscreen(app.fullscreen)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
