@@ -12,8 +12,8 @@ cp -r "$SRC/sensors/." "$APP/sensors/"
 apt-get update
 apt-get install -y python3-tk python3-pip python3-smbus i2c-tools python3-rpi.gpio
 
-python3 -m pip install --break-system-packages smbus2 Adafruit_DHT || \
-python3 -m pip install --user smbus2 Adafruit_DHT
+python3 -m pip install --break-system-packages smbus2 Adafruit_DHT luma.oled || \
+python3 -m pip install --user smbus2 Adafruit_DHT luma.oled
 
 CONFIG="/boot/firmware/config.txt"
 [ -f "$CONFIG" ] || CONFIG="/boot/config.txt"
