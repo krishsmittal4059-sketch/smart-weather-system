@@ -120,7 +120,7 @@ class WeatherApp:
                 from sensors.dht11 import DHT11
                 self.dht=DHT11()
             d=self.dht.read()
-            result["humidity"]=d["humidity"]
+            result["dht_humidity"]=d["humidity"]
             result["dht_temperature"]=d["temperature"]
         except Exception as e:
             result["errors"].append("DHT11: "+str(e))
