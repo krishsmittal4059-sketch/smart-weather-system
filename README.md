@@ -5,7 +5,7 @@ A lightweight Raspberry Pi 1 Model B+ weather station for a science exhibition.
 ## Final hardware
 
 - Raspberry Pi 1 Model B+
-- BME280: temperature + atmospheric pressure + humidity
+- BMP180: temperature + atmospheric pressure
 - DHT11 3-pin module: humidity + temperature
 - DS3231: real-time clock
 - LM393 raindrop sensor: rain/dry
@@ -17,7 +17,7 @@ A lightweight Raspberry Pi 1 Model B+ weather station for a science exhibition.
 
 | Module | Pin | Raspberry Pi |
 |---|---|---|
-| BME280 | VCC | 3.3V, physical 1 |
+| BMP180 | VCC | 3.3V, physical 1 |
 | BME280 | GND | GND, physical 6 |
 | BME280 | SDA | GPIO2/SDA, physical 3 |
 | BME280 | SCL | GPIO3/SCL, physical 5 |
@@ -36,8 +36,8 @@ A lightweight Raspberry Pi 1 Model B+ weather station for a science exhibition.
 | OLED | SDA | GPIO2/SDA, physical 3 |
 | OLED | SCL | GPIO3/SCL, physical 5 |
 
-BME280, OLED and DS3231 share the I2C SDA/SCL bus. Typical addresses are:
-- BME280: 0x76 or 0x77
+BMP180, OLED and DS3231 share the I2C SDA/SCL bus. Typical addresses are:
+- BMP180: 0x77
 - DS3231: 0x68
 - OLED: 0x3C
 
@@ -48,9 +48,9 @@ BME280, OLED and DS3231 share the I2C SDA/SCL bus. Typical addresses are:
 The native Tkinter dashboard provides:
 
 - TEST / LIVE modes
-- BME280 temperature
+- BMP180 temperature
 - DHT11 humidity
-- BME280 atmospheric pressure
+- BMP180 atmospheric pressure
 - Approximate altitude from pressure
 - Rain / dry status
 - DS3231 date and time
@@ -71,7 +71,7 @@ TEST mode works with no sensors connected. It generates realistic changing weath
 
 LIVE mode reads:
 
-- BME280 over I2C at 0x76 or 0x77
+- BMP180 over I2C at 0x77
 - DHT11 on GPIO4
 - DS3231 over I2C address 0x68
 - Rain sensor DO on GPIO17
