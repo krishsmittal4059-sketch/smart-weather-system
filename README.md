@@ -2,26 +2,28 @@
 
 A lightweight Raspberry Pi 1 Model B+ weather station for a science exhibition.
 
-## Hardware
+## Final hardware
 
 - Raspberry Pi 1 Model B+
-- BMP180: temperature + atmospheric pressure
-- DHT22: humidity + temperature
+- BME280: temperature + atmospheric pressure + humidity
+- DHT11 3-pin module: humidity + temperature
 - DS3231: real-time clock
 - LM393 raindrop sensor: rain/dry
-- Breadboard and jumper wires
+- 1.3 inch 128x64 I2C OLED, commonly SH1106 at 0x3C
+- 400-point breadboard and jumper wires
+- Portable 5V power-bank/charger board and enclosure
 
 ## Wiring
 
 | Module | Pin | Raspberry Pi |
 |---|---|---|
-| BMP180 | VCC | 3.3V, physical 1 |
-| BMP180 | GND | GND, physical 6 |
-| BMP180 | SDA | GPIO2/SDA, physical 3 |
-| BMP180 | SCL | GPIO3/SCL, physical 5 |
-| DHT22 | VCC | 3.3V |
-| DHT22 | DATA | GPIO4, physical 7 |
-| DHT22 | GND | GND |
+| BME280 | VCC | 3.3V, physical 1 |
+| BME280 | GND | GND, physical 6 |
+| BME280 | SDA | GPIO2/SDA, physical 3 |
+| BME280 | SCL | GPIO3/SCL, physical 5 |
+| DHT11 | VCC | 3.3V |
+| DHT11 | DATA | GPIO4, physical 7 |
+| DHT11 | GND | GND |
 | DS3231 | SDA | GPIO2/SDA, physical 3 |
 | DS3231 | SCL | GPIO3/SCL, physical 5 |
 | DS3231 | GND | GND |
@@ -29,8 +31,15 @@ A lightweight Raspberry Pi 1 Model B+ weather station for a science exhibition.
 | Rain module | DO | GPIO17, physical 11 |
 | Rain module | GND | GND |
 | Rain module | VCC | 3.3V |
+| OLED | VCC/VDD | 3.3V, physical 1 |
+| OLED | GND | GND, physical 6 |
+| OLED | SDA | GPIO2/SDA, physical 3 |
+| OLED | SCL | GPIO3/SCL, physical 5 |
 
-BMP180 and DS3231 share the I2C SDA/SCL bus.
+BME280, OLED and DS3231 share the I2C SDA/SCL bus. Typical addresses are:
+- BME280: 0x76 or 0x77
+- DS3231: 0x68
+- OLED: 0x3C
 
 **DS3231 warning:** common ZS-042 boards can include a charging circuit intended for rechargeable cells. Verify the exact board before fitting a non-rechargeable CR2032.
 
@@ -39,10 +48,10 @@ BMP180 and DS3231 share the I2C SDA/SCL bus.
 The native Tkinter dashboard provides:
 
 - TEST / LIVE modes
-- Temperature
-- Humidity
-- Atmospheric pressure
-- Approximate altitude
+- BME280 temperature
+- DHT11 humidity
+- BME280 atmospheric pressure
+- Approximate altitude from pressure
 - Rain / dry status
 - DS3231 date and time
 - Temperature minimum / maximum
@@ -50,6 +59,7 @@ The native Tkinter dashboard provides:
 - Individual sensor error reporting
 - Full-screen exhibition view
 - Automatic graphical-login startup
+- Optional OLED status output
 
 It does not use Chromium, a web browser, React, Electron or Matplotlib.
 
@@ -61,10 +71,11 @@ TEST mode works with no sensors connected. It generates realistic changing weath
 
 LIVE mode reads:
 
-- BMP180 over I2C address normally 0x77
-- DHT22 on GPIO4
+- BME280 over I2C at 0x76 or 0x77
+- DHT11 on GPIO4
 - DS3231 over I2C address 0x68
 - Rain sensor DO on GPIO17
+- OLED over I2C, normally 0x3C
 
 A missing sensor is reported instead of crashing the dashboard.
 
@@ -77,7 +88,7 @@ sudo bash install.sh
 sudo reboot
 ```
 
-The installer enables I2C, installs the required Python packages, copies the dashboard and sensor drivers to `/opt/smart-weather-system`, and creates a desktop autostart entry.
+The installer enables I2C, installs the required Python packages, copies the dashboard, sensor drivers and portable mode to `/opt/smart-weather-system`, and creates a desktop autostart entry.
 
 ## Check I2C
 
@@ -87,9 +98,9 @@ After reboot:
 sudo i2cdetect -y 1
 ```
 
-You should normally see the BMP180 at `77` and DS3231 at `68`.
+With all I2C hardware connected, you will normally see `68`, `3c`, and either `76` or `77`.
 
-## Manual run
+## Manual dashboard
 
 ```bash
 python3 /opt/smart-weather-system/weather_station.py
@@ -101,32 +112,25 @@ Windowed development mode:
 python3 /opt/smart-weather-system/weather_station.py --windowed
 ```
 
-## Project files
+## Portable OLED mode
 
-- `weather_station.py` - native Tkinter dashboard
-- `sensors/bmp180.py` - BMP180 I2C driver
-- `sensors/dht22.py` - DHT22 driver
-- `sensors/ds3231.py` - DS3231 I2C reader
-- `sensors/rain_sensor.py` - GPIO17 rain detector
-- `install.sh` - Raspberry Pi installation and autostart
-
-## Portable pocket mode
-
-The project can be used as a portable local weather station. It does not
-need Wi-Fi or a desktop display to measure local conditions.
-
-Use a suitable USB power bank to power the Raspberry Pi, keep the OLED visible,
-and place the temperature/humidity sensor and rain sensor where air can reach
-them. Keep the Pi and power bank protected from rain and moisture.
-
-Start OLED-only portable mode with:
+For the portable enclosure, run without the desktop:
 
 ```bash
 python3 /opt/smart-weather-system/portable_weather.py
 ```
 
-The OLED shows temperature, humidity, pressure, rain status and time. This
-mode runs without Tkinter/X/desktop display.
+The OLED shows temperature, humidity, pressure, rain status, time and mode. This mode does not need Wi-Fi or a desktop display.
 
-For the exhibition, the normal `weather_station.py` dashboard can still be
-used when a larger screen is available.
+Keep the Pi and power electronics protected from rain and moisture. The DHT11 and rain sensor need exposure to the surrounding air/water as appropriate.
+
+## Project files
+
+- `weather_station.py` - native Tkinter dashboard
+- `portable_weather.py` - OLED-only portable mode
+- `sensors/bme280.py` - BME280 I2C driver
+- `sensors/dht11.py` - DHT11 driver
+- `sensors/ds3231.py` - DS3231 I2C reader
+- `sensors/rain_sensor.py` - GPIO17 rain detector
+- `sensors/oled.py` - SH1106/SSD1306 OLED output
+- `install.sh` - Raspberry Pi installation and autostart
