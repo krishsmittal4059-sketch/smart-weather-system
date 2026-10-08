@@ -161,7 +161,7 @@ class WeatherApp:
             self.detail.config(text="Simulation active. No sensors are required. Switch to LIVE when hardware is connected.")
         else:
             errs=d.get("errors",[]); self.fields["system"].config(text="LIVE • OK" if d.get("sensor_ok") else "LIVE • SENSOR ERROR",fg=GREEN if d.get("sensor_ok") else RED)
-            self.fields["sensors"].config(text="\n".join(("✓ "+x.split(":")[0] if ":" in x else x) for x in errs) if errs else "✓ BMP180\n✓ DHT22\n✓ DS3231\n✓ Rain sensor")
+            self.fields["sensors"].config(text="\n".join(("✓ "+x.split(":")[0] if ":" in x else x) for x in errs) if errs else "✓ BME280\n✓ DHT11\n✓ DS3231\n✓ Rain sensor")
             self.detail.config(text="; ".join(errs) if errs else "All requested sensors are responding.")
         if self.oled is not None:
             self.oled.show(temperature=d.get("temperature"),humidity=d.get("humidity"),pressure=d.get("pressure"),rain=d.get("rain",False),clock=rtc,mode=self.mode)
