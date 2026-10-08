@@ -42,7 +42,7 @@ class WeatherApp:
         self.root=root; self.mode="TEST"; self.fullscreen="--windowed" not in sys.argv
         self.history={k:deque(maxlen=MAX_POINTS) for k in ("temperature","humidity","pressure")}
         self.temp_min=self.temp_max=None; self.latest={}; self.sim={"temperature":26.0,"humidity":60.0,"pressure":1012.0}
-        self.bmp=self.dht=self.rtc=self.rain=None
+        self.bme=self.dht=self.rtc=self.rain=None
         try:
             from sensors.oled import OLEDDisplay
             self.oled=OLEDDisplay()
@@ -84,7 +84,7 @@ class WeatherApp:
     def toggle_mode(self): self.set_mode("LIVE" if self.mode=="TEST" else "TEST")
     def set_mode(self,mode):
         self.mode=mode; self.mode_btn.config(text="TEST MODE" if mode=="LIVE" else "LIVE MODE")
-        self.status.config(text=("LIVE MODE • Reading BMP180 + DHT22 + DS3231 + rain sensor" if mode=="LIVE" else "TEST MODE • Simulation active"),fg=GREEN if mode=="LIVE" else YELLOW)
+        self.status.config(text=("LIVE MODE • Reading BME280 + DHT11 + DS3231 + rain sensor" if mode=="LIVE" else "TEST MODE • Simulation active"),fg=GREEN if mode=="LIVE" else YELLOW)
         self.clear_history()
 
     def clear_history(self):
@@ -92,12 +92,12 @@ class WeatherApp:
         self.temp_min=self.temp_max=None; self.redraw()
 
     def init_live(self):
-        if self.bmp is None:
-            from sensors.bmp180 import BMP180
-            self.bmp=BMP180()
+        if self.bme is None:
+            from sensors.bme280 import BME280
+            self.bme=BME280()
         if self.dht is None:
-            from sensors.dht22 import DHT22
-            self.dht=DHT22()
+            from sensors.dht11 import DHT11
+            self.dht=DHT11()
         if self.rtc is None:
             from sensors.ds3231 import DS3231
             self.rtc=DS3231()
@@ -108,15 +108,25 @@ class WeatherApp:
     def read_live(self):
         result={"sensor_ok":False,"rain":False,"mode":"LIVE","errors":[]}
         try:
-            self.init_live(); result.update(self.bmp.read()); result["sensor_ok"]=True
-        except Exception as e: result["errors"].append("BMP180: "+str(e))
+            self.init_live()
+            result.update(self.bme.read())
+            result["sensor_ok"]=True
+        except Exception as e:
+            result["errors"].append("BME280: "+str(e))
         try:
-            d=self.dht.read(); result.update(d)
-        except Exception as e: result["errors"].append("DHT22: "+str(e))
-        try: result["rtc"]=self.rtc.read_datetime()
-        except Exception as e: result["errors"].append("DS3231: "+str(e))
-        try: result["rain"]=self.rain.is_raining()
-        except Exception as e: result["errors"].append("RAIN: "+str(e))
+            d=self.dht.read()
+            result["humidity"]=d["humidity"]
+            result["dht_temperature"]=d["temperature"]
+        except Exception as e:
+            result["errors"].append("DHT11: "+str(e))
+        try:
+            result["rtc"]=self.rtc.read_datetime()
+        except Exception as e:
+            result["errors"].append("DS3231: "+str(e))
+        try:
+            result["rain"]=self.rain.is_raining()
+        except Exception as e:
+            result["errors"].append("RAIN: "+str(e))
         return result
 
     def read_test(self):
