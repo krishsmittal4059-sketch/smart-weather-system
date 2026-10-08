@@ -109,3 +109,24 @@ python3 /opt/smart-weather-system/weather_station.py --windowed
 - `sensors/ds3231.py` - DS3231 I2C reader
 - `sensors/rain_sensor.py` - GPIO17 rain detector
 - `install.sh` - Raspberry Pi installation and autostart
+
+## Portable pocket mode
+
+The project can be used as a portable local weather station. It does not
+need Wi-Fi or a desktop display to measure local conditions.
+
+Use a suitable USB power bank to power the Raspberry Pi, keep the OLED visible,
+and place the temperature/humidity sensor and rain sensor where air can reach
+them. Keep the Pi and power bank protected from rain and moisture.
+
+Start OLED-only portable mode with:
+
+```bash
+python3 /opt/smart-weather-system/portable_weather.py
+```
+
+The OLED shows temperature, humidity, pressure, rain status and time. This
+mode runs without Tkinter/X/desktop display.
+
+For the exhibition, the normal `weather_station.py` dashboard can still be
+used when a larger screen is available.
