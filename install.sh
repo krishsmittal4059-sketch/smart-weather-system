@@ -6,6 +6,7 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 
 mkdir -p "$APP/sensors"
 cp "$SRC/weather_station.py" "$APP/"
+cp "$SRC/portable_weather.py" "$APP/"
 cp -r "$SRC/sensors/." "$APP/sensors/"
 
 apt-get update
@@ -24,7 +25,7 @@ if [ -f "$CONFIG" ]; then
     fi
 fi
 
-chmod 755 "$APP/weather_station.py"
+chmod 755 "$APP/weather_station.py" "$APP/portable_weather.py"
 chmod 755 "$APP/sensors"
 chmod 644 "$APP/sensors/"*.py
 
