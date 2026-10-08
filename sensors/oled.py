@@ -5,10 +5,10 @@ import os
 class OLEDDisplay:
     def __init__(self):
         self.enabled = os.getenv("OLED_ENABLED", "1").lower() not in ("0", "false", "no")
-        self.driver = os.getenv("OLED_DRIVER", "sh1107").lower()
+        self.driver = os.getenv("OLED_DRIVER", "sh1106").lower()
         self.address = int(os.getenv("OLED_ADDR", "0x3c"), 0)
         self.width = int(os.getenv("OLED_WIDTH", "128"))
-        self.height = int(os.getenv("OLED_HEIGHT", "128"))
+        self.height = int(os.getenv("OLED_HEIGHT", "64"))
         self.device = None
         self.available = False
         self.error = ""
@@ -22,11 +22,11 @@ class OLEDDisplay:
             if self.driver == "ssd1306":
                 from luma.oled.device import ssd1306
                 self.device = ssd1306(serial, width=self.width, height=self.height)
-            elif self.driver == "sh1107":
-                from luma.oled.device import sh1107
-                self.device = sh1107(serial, width=self.width, height=self.height)
+            elif self.driver == "sh1106":
+                from luma.oled.device import sh1106
+                self.device = sh1106(serial, width=self.width, height=self.height)
             else:
-                raise ValueError("OLED_DRIVER must be sh1107 or ssd1306")
+                raise ValueError("OLED_DRIVER must be sh1106 or ssd1306")
             self._canvas = canvas
             self.available = True
         except Exception as exc:
