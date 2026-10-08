@@ -39,16 +39,13 @@ class OLEDDisplay:
         try:
             with self._canvas(self.device) as draw:
                 draw.rectangle((0, 0, self.width - 1, self.height - 1), outline=255)
-                draw.text((5, 3), "RPi WEATHER", fill=255)
-                draw.text((5, 19), f"MODE: {mode}", fill=255)
-                draw.line((5, 34, self.width - 6, 34), fill=255)
-                draw.text((5, 39), f'TEMP: {value(temperature, " C")}', fill=255)
-                draw.text((5, 55), f'HUM : {value(humidity, " %")}', fill=255)
-                draw.text((5, 71), f'PRES: {value(pressure, " hPa")}', fill=255)
-                draw.text((5, 87), "RAIN: DETECTED" if rain else "RAIN: DRY", fill=255)
+                draw.text((4, 2), "RPi WEATHER", fill=255)
+                draw.text((4, 14), f"T:{value(temperature, 'C')}  H:{value(humidity, '%')}", fill=255)
+                draw.text((4, 26), f"P:{value(pressure, 'hPa')}", fill=255)
+                draw.text((4, 38), "RAIN: YES" if rain else "RAIN: NO", fill=255)
                 if clock is not None and hasattr(clock, "strftime"):
-                    draw.text((5, 103), clock.strftime("%H:%M:%S"), fill=255)
-                draw.text((5, 118), "LIVE SENSOR" if mode == "LIVE" else "SIMULATION", fill=255)
+                    draw.text((4, 50), clock.strftime("%H:%M:%S"), fill=255)
+                draw.text((82, 50), mode, fill=255)
         except Exception as exc:
             self.error = str(exc)
             self.available = False
