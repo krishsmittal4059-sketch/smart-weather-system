@@ -42,7 +42,7 @@ class WeatherApp:
         self.root=root; self.mode="TEST"; self.fullscreen="--windowed" not in sys.argv
         self.history={k:deque(maxlen=MAX_POINTS) for k in ("temperature","humidity","pressure")}
         self.temp_min=self.temp_max=None; self.latest={}; self.sim={"temperature":26.0,"humidity":60.0,"pressure":1012.0}
-        self.bme=self.dht=self.rtc=self.rain=None
+        self.bmp=self.dht=self.rtc=self.rain=None
         try:
             from sensors.oled import OLEDDisplay
             self.oled=OLEDDisplay()
@@ -84,7 +84,7 @@ class WeatherApp:
     def toggle_mode(self): self.set_mode("LIVE" if self.mode=="TEST" else "TEST")
     def set_mode(self,mode):
         self.mode=mode; self.mode_btn.config(text="TEST MODE" if mode=="LIVE" else "LIVE MODE")
-        self.status.config(text=("LIVE MODE • Reading BME280 + DHT11 + DS3231 + rain sensor" if mode=="LIVE" else "TEST MODE • Simulation active"),fg=GREEN if mode=="LIVE" else YELLOW)
+        self.status.config(text=("LIVE MODE • Reading BMP180 + DHT11 + DS3231 + rain sensor" if mode=="LIVE" else "TEST MODE • Simulation active"),fg=GREEN if mode=="LIVE" else YELLOW)
         self.clear_history()
 
     def clear_history(self):
@@ -108,13 +108,13 @@ class WeatherApp:
     def read_live(self):
         result={"sensor_ok":False,"rain":False,"mode":"LIVE","errors":[]}
         try:
-            if self.bme is None:
-                from sensors.bme280 import BME280
-                self.bme=BME280()
-            result.update(self.bme.read())
+            if self.bmp is None:
+                from sensors.bmp180 import BMP180
+                self.bmp=BMP180()
+            result.update(self.bmp.read())
             result["sensor_ok"]=True
         except Exception as e:
-            result["errors"].append("BME280: "+str(e))
+            result["errors"].append("BMP180: "+str(e))
         try:
             if self.dht is None:
                 from sensors.dht11 import DHT11
@@ -122,6 +122,8 @@ class WeatherApp:
             d=self.dht.read()
             result["dht_humidity"]=d["humidity"]
             result["dht_temperature"]=d["temperature"]
+            if "humidity" not in result:
+                result["humidity"]=d["humidity"]
         except Exception as e:
             result["errors"].append("DHT11: "+str(e))
         try:
@@ -172,7 +174,7 @@ class WeatherApp:
             self.detail.config(text="Simulation active. No sensors are required. Switch to LIVE when hardware is connected.")
         else:
             errs=d.get("errors",[]); self.fields["system"].config(text="LIVE • OK" if d.get("sensor_ok") else "LIVE • SENSOR ERROR",fg=GREEN if d.get("sensor_ok") else RED)
-            self.fields["sensors"].config(text="\n".join(("✓ "+x.split(":")[0] if ":" in x else x) for x in errs) if errs else "✓ BME280\n✓ DHT11\n✓ DS3231\n✓ Rain sensor")
+            self.fields["sensors"].config(text="\n".join(("✓ "+x.split(":")[0] if ":" in x else x) for x in errs) if errs else "✓ BMP180\n✓ DHT11\n✓ DS3231\n✓ Rain sensor")
             self.detail.config(text="; ".join(errs) if errs else "All requested sensors are responding.")
         if self.oled is not None:
             self.oled.show(temperature=d.get("temperature"),humidity=d.get("humidity"),pressure=d.get("pressure"),rain=d.get("rain",False),clock=rtc,mode=self.mode)
