@@ -108,22 +108,33 @@ class WeatherApp:
     def read_live(self):
         result={"sensor_ok":False,"rain":False,"mode":"LIVE","errors":[]}
         try:
-            self.init_live()
+            if self.bme is None:
+                from sensors.bme280 import BME280
+                self.bme=BME280()
             result.update(self.bme.read())
             result["sensor_ok"]=True
         except Exception as e:
             result["errors"].append("BME280: "+str(e))
         try:
+            if self.dht is None:
+                from sensors.dht11 import DHT11
+                self.dht=DHT11()
             d=self.dht.read()
             result["humidity"]=d["humidity"]
             result["dht_temperature"]=d["temperature"]
         except Exception as e:
             result["errors"].append("DHT11: "+str(e))
         try:
+            if self.rtc is None:
+                from sensors.ds3231 import DS3231
+                self.rtc=DS3231()
             result["rtc"]=self.rtc.read_datetime()
         except Exception as e:
             result["errors"].append("DS3231: "+str(e))
         try:
+            if self.rain is None:
+                from sensors.rain_sensor import RainSensor
+                self.rain=RainSensor()
             result["rain"]=self.rain.is_raining()
         except Exception as e:
             result["errors"].append("RAIN: "+str(e))
