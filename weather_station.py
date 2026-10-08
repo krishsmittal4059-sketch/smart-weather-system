@@ -43,6 +43,11 @@ class WeatherApp:
         self.history={k:deque(maxlen=MAX_POINTS) for k in ("temperature","humidity","pressure")}
         self.temp_min=self.temp_max=None; self.latest={}; self.sim={"temperature":26.0,"humidity":60.0,"pressure":1012.0}
         self.bmp=self.dht=self.rtc=self.rain=None
+        try:
+            from sensors.oled import OLEDDisplay
+            self.oled=OLEDDisplay()
+        except Exception:
+            self.oled=None
         root.title("RPi Weather Observatory"); root.configure(bg=BG); root.minsize(980,620); root.geometry("1280x780")
         root.bind("<F11>",lambda e:self.set_fullscreen(not self.fullscreen)); root.bind("<Escape>",lambda e:self.set_fullscreen(False))
         self.build_ui(); self.set_fullscreen(self.fullscreen); self.sample()
@@ -148,6 +153,8 @@ class WeatherApp:
             errs=d.get("errors",[]); self.fields["system"].config(text="LIVE • OK" if d.get("sensor_ok") else "LIVE • SENSOR ERROR",fg=GREEN if d.get("sensor_ok") else RED)
             self.fields["sensors"].config(text="\n".join(("✓ "+x.split(":")[0] if ":" in x else x) for x in errs) if errs else "✓ BMP180\n✓ DHT22\n✓ DS3231\n✓ Rain sensor")
             self.detail.config(text="; ".join(errs) if errs else "All requested sensors are responding.")
+        if self.oled is not None:
+            self.oled.show(temperature=d.get("temperature"),humidity=d.get("humidity"),pressure=d.get("pressure"),rain=d.get("rain",False),clock=rtc,mode=self.mode)
         self.g_temp.set_data(self.history["temperature"]); self.g_hum.set_data(self.history["humidity"]); self.g_press.set_data(self.history["pressure"])
 
 def main():
