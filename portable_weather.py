@@ -7,8 +7,8 @@ I2C OLED. Intended for a portable Raspberry Pi 1 Model B+ setup.
 import time
 from datetime import datetime
 
-from sensors.bmp180 import BMP180
-from sensors.dht22 import DHT22
+from sensors.bme280 import BME280
+from sensors.dht11 import DHT11
 from sensors.ds3231 import DS3231
 from sensors.rain_sensor import RainSensor
 from sensors.oled import OLEDDisplay
@@ -17,8 +17,8 @@ UPDATE_SECONDS = 2.5
 
 def main():
     oled = OLEDDisplay()
-    bmp = BMP180()
-    dht = DHT22()
+    bme = BME280()
+    dht = DHT11()
     rtc = DS3231()
     rain = RainSensor()
 
@@ -28,7 +28,7 @@ def main():
         raining = False
 
         try:
-            data = bmp.read()
+            data = bme.read()
             temperature = data.get("temperature")
             pressure = data.get("pressure")
         except Exception:
