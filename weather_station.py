@@ -42,7 +42,7 @@ class WeatherApp:
         self.root=root; self.mode="TEST"; self.fullscreen="--windowed" not in sys.argv
         self.history={k:deque(maxlen=MAX_POINTS) for k in ("temperature","humidity","pressure")}
         self.temp_min=self.temp_max=None; self.latest={}; self.sim={"temperature":26.0,"humidity":60.0,"pressure":1012.0}
-        self.bmp=self.dht=self.rtc=self.rain=None
+        self.serial=None; self.serial_port="Arduino not connected"
         try:
             from sensors.oled import OLEDDisplay
             self.oled=OLEDDisplay()
@@ -75,7 +75,7 @@ class WeatherApp:
         side=tk.Frame(lower,bg=BG,width=340); side.pack(side="right",fill="y"); side.pack_propagate(False)
         info=tk.Frame(side,bg=PANEL,highlightthickness=1,highlightbackground=BORDER); info.pack(fill="both",expand=True)
         self.fields={}
-        for key,label in (("system","SYSTEM STATUS"),("mode","OPERATING MODE"),("rain","RAIN SENSOR"),("clock","RTC TIME"),("range","TEMPERATURE RANGE"),("sensors","SENSORS")):
+        for key,label in (("system","SYSTEM STATUS"),("mode","OPERATING MODE"),("rain","RAIN SENSOR"),("clock","PI SYSTEM TIME"),("range","TEMPERATURE RANGE"),("sensors","ARDUINO / SENSORS")):
             tk.Label(info,text=label,bg=PANEL,fg=MUTED,font=("Helvetica",10,"bold")).pack(anchor="w",padx=16,pady=(10,2))
             v=tk.Label(info,text="--",bg=PANEL,fg=TEXT,font=("Helvetica",13,"bold"),wraplength=300,justify="left"); v.pack(anchor="w",padx=16,pady=(0,5)); self.fields[key]=v
         self.detail=tk.Label(side,text="TEST mode works without hardware.",bg=PANEL2,fg=TEXT,wraplength=300,justify="left",font=("Helvetica",10),padx=12,pady=10); self.detail.pack(fill="x",pady=(8,0))
@@ -84,62 +84,66 @@ class WeatherApp:
     def toggle_mode(self): self.set_mode("LIVE" if self.mode=="TEST" else "TEST")
     def set_mode(self,mode):
         self.mode=mode; self.mode_btn.config(text="TEST MODE" if mode=="LIVE" else "LIVE MODE")
-        self.status.config(text=("LIVE MODE • Reading BMP180 + DHT11 + DS3231 + rain sensor" if mode=="LIVE" else "TEST MODE • Simulation active"),fg=GREEN if mode=="LIVE" else YELLOW)
+        self.status.config(text=("LIVE MODE • BMP180 + DHT22 + rain via Arduino USB" if mode=="LIVE" else "TEST MODE • Simulation active"),fg=GREEN if mode=="LIVE" else YELLOW)
         self.clear_history()
 
     def clear_history(self):
         for v in self.history.values(): v.clear()
         self.temp_min=self.temp_max=None; self.redraw()
 
-    def init_live(self):
-        if self.bme is None:
-            from sensors.bme280 import BME280
-            self.bme=BME280()
-        if self.dht is None:
-            from sensors.dht11 import DHT11
-            self.dht=DHT11()
-        if self.rtc is None:
-            from sensors.ds3231 import DS3231
-            self.rtc=DS3231()
-        if self.rain is None:
-            from sensors.rain_sensor import RainSensor
-            self.rain=RainSensor()
-
     def read_live(self):
-        result={"sensor_ok":False,"rain":False,"mode":"LIVE","errors":[]}
+        result={"sensor_ok":False,"rain":None,"mode":"LIVE","errors":[],
+                "temperature":None,"humidity":None,"pressure":None,"altitude":None,
+                "rtc":datetime.now()}
         try:
-            if self.bmp is None:
-                from sensors.bmp180 import BMP180
-                self.bmp=BMP180()
-            result.update(self.bmp.read())
-            result["sensor_ok"]=True
+            import serial
+            from serial.tools import list_ports
+            if self.serial is None or not self.serial.is_open:
+                ports=[p.device for p in list_ports.comports()]
+                preferred=[p for p in ports if ("ttyACM" in p or "ttyUSB" in p)]
+                for port in preferred+ [p for p in ports if p not in preferred]:
+                    try:
+                        self.serial=serial.Serial(port,9600,timeout=0.2)
+                        self.serial_port=port
+                        import time
+                        time.sleep(2.0)
+                        self.serial.reset_input_buffer()
+                        break
+                    except Exception:
+                        self.serial=None
+            if self.serial is None:
+                raise RuntimeError("Arduino USB serial port not found")
+            latest=None
+            # Read a few lines; accept only a complete, current WX packet.
+            for _ in range(8):
+                line=self.serial.readline().decode("utf-8","ignore").strip()
+                if not line:
+                    break
+                p=line.split(",")
+                if len(p)==6 and p[0]=="WX":
+                    latest=p
+            if latest is None:
+                raise RuntimeError("Waiting for Arduino WX data")
+            _,temp,humidity,pressure,altitude,rain=latest
+            result["temperature"]=float(temp)
+            result["humidity"]=float(humidity)
+            pval=float(pressure); aval=float(altitude)
+            result["pressure"]=pval if pval>0 else None
+            result["altitude"]=aval if pval>0 and aval>-900 else None
+            result["rain"]=bool(int(rain))
+            result["sensor_ok"]=result["pressure"] is not None
+            if not result["sensor_ok"]:
+                result["errors"].append("BMP180: not detected by Arduino")
+            result["arduino_status"]=self.serial_port
         except Exception as e:
-            result["errors"].append("BMP180: "+str(e))
-        try:
-            if self.dht is None:
-                from sensors.dht11 import DHT11
-                self.dht=DHT11()
-            d=self.dht.read()
-            result["dht_humidity"]=d["humidity"]
-            result["dht_temperature"]=d["temperature"]
-            if "humidity" not in result:
-                result["humidity"]=d["humidity"]
-        except Exception as e:
-            result["errors"].append("DHT11: "+str(e))
-        try:
-            if self.rtc is None:
-                from sensors.ds3231 import DS3231
-                self.rtc=DS3231()
-            result["rtc"]=self.rtc.read_datetime()
-        except Exception as e:
-            result["errors"].append("DS3231: "+str(e))
-        try:
-            if self.rain is None:
-                from sensors.rain_sensor import RainSensor
-                self.rain=RainSensor()
-            result["rain"]=self.rain.is_raining()
-        except Exception as e:
-            result["errors"].append("RAIN: "+str(e))
+            result["errors"].append("Arduino/BMP180/DHT22: "+str(e))
+            result["arduino_status"]="Not connected / data unavailable"
+            try:
+                if self.serial is not None:
+                    self.serial.close()
+            except Exception:
+                pass
+            self.serial=None
         return result
 
     def read_test(self):
@@ -165,7 +169,7 @@ class WeatherApp:
         d=self.latest
         for key,data_key,fmt in (("Temperature","temperature","{:.1f}"),("Humidity","humidity","{:.1f}"),("Pressure","pressure","{:.1f}"),("Altitude","altitude","{:.1f}")):
             val=d.get(data_key); self.metric[key].config(text=fmt.format(float(val)) if val is not None else "--")
-        rtc=d.get("rtc"); self.fields["clock"].config(text=rtc.strftime("%Y-%m-%d  %H:%M:%S") if hasattr(rtc,"strftime") else "--")
+        self.fields["clock"].config(text=datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
         self.fields["mode"].config(text=self.mode,fg=GREEN if self.mode=="LIVE" else YELLOW)
         self.fields["rain"].config(text="RAIN DETECTED" if d.get("rain") else "DRY",fg=YELLOW if d.get("rain") else GREEN)
         self.fields["range"].config(text=f"{self.temp_min:.1f} °C  /  {self.temp_max:.1f} °C" if self.temp_min is not None else "--")
@@ -174,10 +178,10 @@ class WeatherApp:
             self.detail.config(text="Simulation active. No sensors are required. Switch to LIVE when hardware is connected.")
         else:
             errs=d.get("errors",[]); self.fields["system"].config(text="LIVE • OK" if d.get("sensor_ok") else "LIVE • SENSOR ERROR",fg=GREEN if d.get("sensor_ok") else RED)
-            self.fields["sensors"].config(text="\n".join(("✓ "+x.split(":")[0] if ":" in x else x) for x in errs) if errs else "✓ BMP180\n✓ DHT11\n✓ DS3231\n✓ Rain sensor")
+            self.fields["sensors"].config(text=d.get("arduino_status","Arduino unavailable")+"\n"+"; ".join(errs) if errs else "✓ BMP180\n✓ DHT22\n✓ Rain sensor")
             self.detail.config(text="; ".join(errs) if errs else "All requested sensors are responding.")
         if self.oled is not None:
-            self.oled.show(temperature=d.get("temperature"),humidity=d.get("humidity"),pressure=d.get("pressure"),rain=d.get("rain",False),clock=rtc,mode=self.mode)
+            self.oled.show(temperature=d.get("temperature"),humidity=d.get("humidity"),pressure=d.get("pressure"),rain=d.get("rain",False),clock=datetime.now(),mode=self.mode)
         self.g_temp.set_data(self.history["temperature"]); self.g_hum.set_data(self.history["humidity"]); self.g_press.set_data(self.history["pressure"])
 
 def main():
