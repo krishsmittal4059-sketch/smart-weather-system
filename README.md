@@ -1,136 +1,104 @@
-# RPi Weather Observatory
+# Smart Weather Observatory
 
-A lightweight Raspberry Pi 1 Model B+ weather station for a science exhibition.
+A Raspberry Pi 1 Model B+ science-exhibition weather dashboard. The Arduino UNO reads all three sensors and sends measurements to the Pi over USB serial. The Pi displays readings and graphs in a Tkinter dashboard.
 
-## Final hardware
+## Hardware
 
-- Raspberry Pi 1 Model B+
-- BMP180: temperature + atmospheric pressure
-- DHT11 3-pin module: humidity + temperature
-- DS3231: real-time clock
-- LM393 raindrop sensor: rain/dry
-- 1.3 inch 128x64 I2C OLED, commonly SH1106 at 0x3C
-- 400-point breadboard and jumper wires
-- Portable 5V power-bank/charger board and enclosure
+- Raspberry Pi 1 Model B+ running Raspberry Pi OS
+- Arduino UNO and USB data cable to the Pi
+- BMP180 pressure/temperature breakout
+- DHT22 3-pin module (temperature/humidity)
+- LM393 rain comparator board and matching rain plate
+- Breadboard and jumper wires
+
+## Important safety check before wiring
+
+The DHT22 module and LM393 comparator board were previously reported to become hot immediately after power-on. **Keep the Pi and Arduino unplugged and do not power either hot module again until its VCC/GND labels and wiring have been checked.** A module getting hot can indicate reversed power, a short, incompatible voltage or a damaged board. Do not assume the wiring is safe just because the BMP180 stayed cool. If uncertain, compare the exact board labels with its documentation or ask a knowledgeable adult/teacher to inspect it.
 
 ## Wiring
 
-| Module | Pin | Raspberry Pi |
-|---|---|---|
-| BMP180 | VCC | 3.3V, physical 1 |
-| BME280 | GND | GND, physical 6 |
-| BME280 | SDA | GPIO2/SDA, physical 3 |
-| BME280 | SCL | GPIO3/SCL, physical 5 |
-| DHT11 | VCC | 3.3V |
-| DHT11 | DATA | GPIO4, physical 7 |
-| DHT11 | GND | GND |
-| DS3231 | SDA | GPIO2/SDA, physical 3 |
-| DS3231 | SCL | GPIO3/SCL, physical 5 |
-| DS3231 | GND | GND |
-| DS3231 | VCC | Use the voltage required by your exact module |
-| Rain module | DO | GPIO17, physical 11 |
-| Rain module | GND | GND |
-| Rain module | VCC | 3.3V |
-| OLED | VCC/VDD | 3.3V, physical 1 |
-| OLED | GND | GND, physical 6 |
-| OLED | SDA | GPIO2/SDA, physical 3 |
-| OLED | SCL | GPIO3/SCL, physical 5 |
+### BMP180 → Arduino UNO (I2C)
 
-BMP180, OLED and DS3231 share the I2C SDA/SCL bus. Typical addresses are:
-- BMP180: 0x77
-- DS3231: 0x68
-- OLED: 0x3C
+| BMP180 breakout label | Arduino UNO |
+|---|---|
+| VIN/VCC | 3.3V only if the breakout is specified for 3.3V; follow its printed rating |
+| GND | GND |
+| SDA | A4 (SDA) |
+| SCL | A5 (SCL) |
 
-**DS3231 warning:** common ZS-042 boards can include a charging circuit intended for rechargeable cells. Verify the exact board before fitting a non-rechargeable CR2032.
+The bare BMP180 chip is not a 5V part. Some breakout boards include a regulator/level shifting and some do not, so check the exact board before connecting power. Do not guess from wire colours.
 
-## Dashboard
+### DHT22 3-pin module → Arduino UNO
 
-The native Tkinter dashboard provides:
+Use the actual printed `+`/`VCC`, `OUT`/`DATA`, and `-`/`GND` labels on the module; pin order varies by module.
 
-- TEST / LIVE modes
-- BMP180 temperature
-- DHT11 humidity
-- BMP180 atmospheric pressure
-- Approximate altitude from pressure
-- Rain / dry status
-- DS3231 date and time
-- Temperature minimum / maximum
-- Temperature, humidity and pressure history graphs
-- Individual sensor error reporting
-- Full-screen exhibition view
-- Automatic graphical-login startup
-- Optional OLED status output
+| DHT22 module label | Arduino UNO |
+|---|---|
+| VCC/+ | Supply voltage supported by the module |
+| DATA/OUT | D2 |
+| GND/- | GND |
 
-It does not use Chromium, a web browser, React, Electron or Matplotlib.
+### LM393 rain module → Arduino UNO
 
-## TEST mode
+| Rain comparator label | Arduino UNO |
+|---|---|
+| VCC | Only the voltage specified for that exact board |
+| GND | GND |
+| DO | D3 |
+| AO | Leave disconnected (not used) |
 
-TEST mode works with no sensors connected. It generates realistic changing weather data so the exhibition dashboard can be demonstrated before hardware is attached.
+Connect the separate rain plate to its matching comparator-board connector. Many LM393 boards output LOW when wet, but the behaviour can vary; confirm it during a safe test.
 
-## LIVE mode
+### Arduino UNO → Raspberry Pi
 
-LIVE mode reads:
+Connect the UNO to the Pi with a USB **data** cable. Do not connect the UNO's 5V pin or its 5V signal pins directly to Raspberry Pi GPIO.
 
-- BMP180 over I2C at 0x77
-- DHT11 on GPIO4
-- DS3231 over I2C address 0x68
-- Rain sensor DO on GPIO17
-- OLED over I2C, normally 0x3C
+## Arduino setup
 
-A missing sensor is reported instead of crashing the dashboard.
+1. Open Arduino IDE on a computer and select **Arduino UNO**.
+2. In Library Manager install:
+   - **Adafruit BMP085 Library** (supports BMP180)
+   - **DHT sensor library by Adafruit**
+   - **Adafruit Unified Sensor**
+3. Open [arduino/smart_weather_arduino.ino](arduino/smart_weather_arduino.ino), compile, and upload it.
+4. The sketch sends serial at **9600 baud**, with records like:
+   `WX,28.4,61.2,1008.7,39.5,0`
+   This means temperature °C, humidity %, pressure hPa, approximate altitude m, and rain-wet flag (0/1).
+5. The rain sensor's digital polarity may differ by board. If the wet/dry status is reversed, the code's `rainWet` logic will need to be inverted.
 
-## Installation
+## Raspberry Pi dashboard
 
-From the repository directory:
+The dashboard reads **all sensor measurements from the Arduino USB serial connection**. It no longer expects a DHT11, a DS3231 RTC, or Pi GPIO rain input. The clock uses the Pi's system time.
+
+Install dependencies and enable I2C (the dashboard itself uses USB serial for the sensors):
 
 ```bash
-sudo bash install.sh
-sudo reboot
+sudo apt update
+sudo apt install -y python3-tk python3-pip
+python3 -m pip install --user pyserial
 ```
 
-The installer enables I2C, installs the required Python packages, copies the dashboard, sensor drivers and portable mode to `/opt/smart-weather-system`, and creates a desktop autostart entry.
-
-## Check I2C
-
-After reboot:
+Run the dashboard from the repository directory:
 
 ```bash
-sudo i2cdetect -y 1
+python3 weather_station.py
 ```
 
-With all I2C hardware connected, you will normally see `68`, `3c`, and either `76` or `77`.
+Use **LIVE MODE** only after the sensors and Arduino have been checked and are sending valid serial data. **TEST MODE** displays simulated values and does not need connected sensors. Press F11 for full screen or Esc to leave full screen.
 
-## Manual dashboard
+If LIVE mode reports no Arduino, check that the UNO is connected by a USB data cable and close Arduino IDE Serial Monitor before running the dashboard. To inspect the serial stream, use Arduino IDE Serial Monitor at 9600 baud, then close it before opening the Pi dashboard (only one program can normally use the serial port at a time).
 
-```bash
-python3 /opt/smart-weather-system/weather_station.py
-```
+## Troubleshooting
 
-Windowed development mode:
-
-```bash
-python3 /opt/smart-weather-system/weather_station.py --windowed
-```
-
-## Portable OLED mode
-
-For the portable enclosure, run without the desktop:
-
-```bash
-python3 /opt/smart-weather-system/portable_weather.py
-```
-
-The OLED shows temperature, humidity, pressure, rain status, time and mode. This mode does not need Wi-Fi or a desktop display.
-
-Keep the Pi and power electronics protected from rain and moisture. The DHT11 and rain sensor need exposure to the surrounding air/water as appropriate.
+- **BMP180 not detected:** check the module's labels and supported voltage, SDA→A4, SCL→A5, GND, and the Adafruit BMP085 library. A breakout may need a different wiring/voltage arrangement.
+- **Arduino not connected:** check `ls /dev/ttyACM*` and `ls /dev/ttyUSB*` on the Pi; install `python3-serial` if needed, and ensure the current user has serial-port permission.
+- **DHT22 error:** confirm the data pin is D2 in the sketch and the module pin labels are correct.
+- **Rain state reversed:** invert the `digitalRead(RAIN_DO_PIN) == LOW` logic if your board has opposite polarity.
+- **Any module heats up:** unplug power immediately and do not power it again until the board, voltage and polarity have been checked.
 
 ## Project files
 
-- `weather_station.py` - native Tkinter dashboard
-- `portable_weather.py` - OLED-only portable mode
-- `sensors/bme280.py` - BME280 I2C driver
-- `sensors/dht11.py` - DHT11 driver
-- `sensors/ds3231.py` - DS3231 I2C reader
-- `sensors/rain_sensor.py` - GPIO17 rain detector
-- `sensors/oled.py` - SH1106/SSD1306 OLED output
-- `install.sh` - Raspberry Pi installation and autostart
+- `weather_station.py` — Tkinter dashboard with TEST/LIVE modes and graphs
+- `arduino/smart_weather_arduino.ino` — UNO firmware for BMP180, DHT22 and LM393 rain module
+- `sensors/bmp180.py` — legacy Raspberry Pi I2C BMP180 driver (not used by the new serial dashboard)
+- `install.sh` — legacy Pi setup script
