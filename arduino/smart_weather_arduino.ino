@@ -1,75 +1,84 @@
 /*
   Smart Weather Observatory - Arduino UNO
-  Sensors: BMP180 (I2C), DHT22 module, LM393 rain module.
-  Serial format at 9600 baud:
-  WX,tempC,humidityPercent,pressure_hPa,altitude_m,rainWet(0/1)
+  Sensors: DHT22 temperature/humidity module and LM393 rain module.
+  BMP180 has been removed from this version.
+  USB serial output: readable weather report at 9600 baud.
 
   Libraries to install in Arduino IDE:
-  - Adafruit BMP085 Library (works with BMP180)
   - DHT sensor library by Adafruit
-  - Adafruit Unified Sensor
+  - Adafruit Unified Sensor (if requested by Library Manager)
 
-  IMPORTANT: Check each module's VCC/GND labels and voltage requirements
-  before powering it. Do not power a board that previously became hot.
+  Check each module's printed VCC/GND labels and voltage requirements
+  before powering it. Never power a module that becomes hot.
 */
-#include <Wire.h>
-#include <Adafruit_BMP085.h>
 #include <DHT.h>
 
 #define DHT_PIN 2
 #define DHT_TYPE DHT22
+#define RAIN_AO_PIN A0
 #define RAIN_DO_PIN 3
 
-Adafruit_BMP085 bmp;
 DHT dht(DHT_PIN, DHT_TYPE);
-bool bmpReady = false;
+
+const int DRY_VALUE = 900;
+const int WET_VALUE = 300;
 
 void setup() {
   Serial.begin(9600);
-  Wire.begin();
-  pinMode(RAIN_DO_PIN, INPUT);
   dht.begin();
-  delay(2000);
-  bmpReady = bmp.begin();
-  Serial.println("SMART_WEATHER_READY");
+  pinMode(RAIN_AO_PIN, INPUT);
+  pinMode(RAIN_DO_PIN, INPUT);
+
+  delay(500);
+  Serial.println("SMART WEATHER STATION");
+  Serial.println("---------------------");
+  Serial.println("Sensors initialized!");
 }
 
 void loop() {
   float humidity = dht.readHumidity();
-  float dhtTempC = dht.readTemperature();
-  int rainWet = (digitalRead(RAIN_DO_PIN) == LOW) ? 1 : 0;
+  float temperature = dht.readTemperature();
 
-  // Use BMP180 temperature when available; otherwise use DHT22 temperature.
-  float temperatureC = isnan(dhtTempC) ? -999.0 : dhtTempC;
-  float pressureHpa = -1.0;
-  float altitudeM = -999.0;
+  int rainRaw = analogRead(RAIN_AO_PIN);
+  int rainDigital = digitalRead(RAIN_DO_PIN);
 
-  if (bmpReady) {
-    temperatureC = bmp.readTemperature();
-    pressureHpa = bmp.readPressure() / 100.0;
-    altitudeM = bmp.readAltitude();
-  }
+  int wetness = map(rainRaw, DRY_VALUE, WET_VALUE, 0, 100);
+  wetness = constrain(wetness, 0, 100);
 
-  if (isnan(humidity)) {
-    Serial.println("ERROR,DHT22");
-  } else if (bmpReady) {
-    Serial.print("WX,");
-    Serial.print(temperatureC, 1);
-    Serial.print(",");
-    Serial.print(humidity, 1);
-    Serial.print(",");
-    Serial.print(pressureHpa, 1);
-    Serial.print(",");
-    Serial.print(altitudeM, 1);
-    Serial.print(",");
-    Serial.println(rainWet);
+  Serial.println();
+  Serial.println("===== WEATHER REPORT =====");
+
+  if (!isnan(temperature) && !isnan(humidity)) {
+    Serial.print("Temperature: ");
+    Serial.print(temperature);
+    Serial.println(" C");
+
+    Serial.print("Humidity: ");
+    Serial.print(humidity);
+    Serial.println(" %");
   } else {
-    // Explicitly mark unavailable BMP180 readings; dashboard reports error.
-    Serial.print("WX,");
-    Serial.print(temperatureC, 1);
-    Serial.print(",");
-    Serial.print(humidity, 1);
-    Serial.println(",-1,-999,0");
+    Serial.println("DHT22 read error!");
   }
-  delay(2000);
+
+  Serial.print("Rain analog value: ");
+  Serial.print(rainRaw);
+  Serial.println(" / 1023");
+
+  Serial.print("Estimated plate wetness: ");
+  Serial.print(wetness);
+  Serial.println(" %");
+
+  Serial.print("Rain threshold output: ");
+  Serial.println(rainDigital == LOW ? "TRIGGERED" : "NOT TRIGGERED");
+
+  if (wetness >= 70) {
+    Serial.println("Plate status: VERY WET");
+  } else if (wetness >= 30) {
+    Serial.println("Plate status: DAMP");
+  } else {
+    Serial.println("Plate status: DRY / LIGHTLY WET");
+  }
+
+  Serial.println("==========================");
+  delay(1000);
 }
